@@ -52,7 +52,7 @@ export async function POST(req: NextRequest) {
     const slug = crypto.randomBytes(4).toString('hex');
 
     // 4. Save to local database
-    const saved = saveResult(slug, inputs, sensitivity, explanations);
+    const saved = await saveResult(slug, inputs, sensitivity, explanations);
 
     return NextResponse.json({
       success: true,

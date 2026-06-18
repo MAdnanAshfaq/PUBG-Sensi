@@ -10,7 +10,7 @@ interface PageProps {
 
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
   const { slug } = await params;
-  const result = getResult(slug);
+  const result = await getResult(slug);
   if (!result) {
     return {
       title: 'Config Not Found | AimSync',
@@ -28,7 +28,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
 
 export default async function ResultPage({ params }: PageProps) {
   const { slug } = await params;
-  const result = getResult(slug);
+  const result = await getResult(slug);
 
   if (!result) {
     return (

@@ -1,17 +1,15 @@
 'use client';
 
-import { useState, useRef, useEffect } from 'react';
+import { useState } from 'react';
 import { 
   Copy, 
   Check, 
   Share2, 
-  Link, 
   Lightbulb, 
-  Sliders, 
   RotateCcw, 
   Target, 
-  Trash2, 
-  Zap 
+  Minus, 
+  Plus 
 } from 'lucide-react';
 import { SavedResult } from '@/utils/db';
 
@@ -21,17 +19,49 @@ interface SensitivityDashboardProps {
 
 type TabType = 'camera' | 'ads' | 'gyro' | 'adsGyro';
 
+interface ScopeState {
+  no_scope_3rd: number;
+  no_scope_1st: number;
+  red_dot: number;
+  scope_2x: number;
+  scope_3x: number;
+  scope_4x: number;
+  scope_6x: number;
+  scope_8x: number;
+}
+
 export default function SensitivityDashboard({ result }: SensitivityDashboardProps) {
-  const [activeTab, setActiveTab] = useState<TabType>('camera');
   const [copiedLink, setCopiedLink] = useState(false);
   const [copiedConfig, setCopiedConfig] = useState(false);
+  const [activeAnalysisTab, setActiveAnalysisTab] = useState<TabType>('camera');
 
   // Editable sensitivity values initialized from server calculated settings
-  const [sensValues, setSensValues] = useState({
-    camera: { ...result.values.camera },
-    ads: { ...result.values.ads },
-    gyro: result.values.gyro ? { ...result.values.gyro } : null,
-    adsGyro: result.values.adsGyro ? { ...result.values.adsGyro } : null,
+  const [sensValues, setSensValues] = useState<{
+    camera: ScopeState;
+    ads: ScopeState;
+    gyro: ScopeState | null;
+    adsGyro: ScopeState | null;
+  }>(() => {
+    const initCategory = (catValues: any) => {
+      if (!catValues) return null;
+      return {
+        no_scope_3rd: catValues.no_scope,
+        no_scope_1st: catValues.no_scope, // FPP starts equal to 3rd person
+        red_dot: catValues.red_dot,
+        scope_2x: catValues.scope_2x,
+        scope_3x: catValues.scope_3x,
+        scope_4x: catValues.scope_4x,
+        scope_6x: catValues.scope_6x,
+        scope_8x: catValues.scope_8x,
+      };
+    };
+
+    return {
+      camera: initCategory(result.values.camera)!,
+      ads: initCategory(result.values.ads)!,
+      gyro: initCategory(result.values.gyro),
+      adsGyro: initCategory(result.values.adsGyro),
+    };
   });
 
   const hasGyro = result.inputs.gyroMode !== 'off';
@@ -49,7 +79,12 @@ export default function SensitivityDashboard({ result }: SensitivityDashboardPro
 
   // Reset slider to server default
   const handleResetSlider = (category: TabType, scopeKey: string) => {
-    const defaultVal = (result.values as any)[category]?.[scopeKey];
+    let defaultVal;
+    if (scopeKey === 'no_scope_3rd' || scopeKey === 'no_scope_1st') {
+      defaultVal = (result.values as any)[category]?.no_scope;
+    } else {
+      defaultVal = (result.values as any)[category]?.[scopeKey];
+    }
     if (defaultVal !== undefined) {
       handleSliderChange(category, scopeKey, defaultVal);
     }
@@ -69,11 +104,11 @@ export default function SensitivityDashboard({ result }: SensitivityDashboardPro
     text += `Device: ${result.inputs.deviceTier.toUpperCase()} | FPS: ${result.inputs.fps} | Finger Layout: ${result.inputs.fingerCount} Fingers\n`;
     text += `Combat Playstyle: ${result.inputs.playstyle.toUpperCase()} | Corrective Tuning: ${result.inputs.primaryProblem.toUpperCase()}\n\n`;
 
-    const formatBlock = (title: string, values: any) => {
+    const formatBlock = (title: string, values: ScopeState | null) => {
       if (!values) return '';
       let block = `[${title} Sensitivity]\n`;
-      block += `3rd Person No Scope: ${values.no_scope}%\n`;
-      block += `1st Person No Scope: ${values.no_scope}%\n`; // Map no_scope to both in output
+      block += `3rd Person No Scope: ${values.no_scope_3rd}%\n`;
+      block += `1st Person No Scope: ${values.no_scope_1st}%\n`;
       block += `Red Dot, Holo, Aim Assist: ${values.red_dot}%\n`;
       block += `2x Scope: ${values.scope_2x}%\n`;
       block += `3x Scope: ${values.scope_3x}%\n`;
@@ -95,20 +130,9 @@ export default function SensitivityDashboard({ result }: SensitivityDashboardPro
     setTimeout(() => setCopiedConfig(false), 2000);
   };
 
-  // Mapping readable labels
-  const scopeLabels: Record<string, string> = {
-    no_scope: '3rd Person No Scope',
-    red_dot: 'Red Dot, Holo, Aim Assist',
-    scope_2x: '2x Scope',
-    scope_3x: '3x Scope, Win94',
-    scope_4x: '4x Scope, VSS',
-    scope_6x: '6x Scope',
-    scope_8x: '8x Scope',
-  };
-
-  // Get explanation text for active tab
+  // Get explanation text for active analysis tab
   const getActiveExplanation = () => {
-    switch (activeTab) {
+    switch (activeAnalysisTab) {
       case 'camera':
         return result.explanations.camera_explanation;
       case 'ads':
@@ -122,278 +146,122 @@ export default function SensitivityDashboard({ result }: SensitivityDashboardPro
     }
   };
 
-  // Weapon Spray Recoil Simulator variables
-  const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  const [activeSimScope, setActiveSimScope] = useState<string>('red_dot');
-  const [isFiring, setIsFiring] = useState(false);
-  const [bulletsFired, setBulletsFired] = useState(0);
-  const [accuracy, setAccuracy] = useState<number | null>(null);
-  
-  // Track firing physics state
-  const physicsRef = useRef({
-    crosshairX: 150,
-    crosshairY: 150,
-    bullets: [] as { x: number; y: number; time: number }[],
-    dragY: 0,
-    dragX: 0,
-    isMouseDown: false,
-    recoilYOffset: 0,
-    recoilXOffset: 0,
-    lastFrameTime: 0,
-  });
+  // Render a PUBG-style sensitivity card containing two columns of sliders
+  const renderSensCard = (
+    category: TabType,
+    title: string,
+    desc: string,
+    maxVal: number
+  ) => {
+    const values = sensValues[category];
+    if (!values) return null;
 
-  const resetSimulator = () => {
-    physicsRef.current.bullets = [];
-    physicsRef.current.dragX = 0;
-    physicsRef.current.dragY = 0;
-    physicsRef.current.recoilXOffset = 0;
-    physicsRef.current.recoilYOffset = 0;
-    physicsRef.current.crosshairX = 150;
-    physicsRef.current.crosshairY = 150;
-    setBulletsFired(0);
-    setAccuracy(null);
-    drawCanvas();
-  };
-
-  const drawCanvas = () => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-
-    const W = canvas.width;
-    const H = canvas.height;
-
-    // Clear Canvas
-    ctx.fillStyle = '#0c0e10';
-    ctx.fillRect(0, 0, W, H);
-
-    // Draw grid lines (tactical HUD style)
-    ctx.strokeStyle = 'rgba(77, 71, 50, 0.15)';
-    ctx.lineWidth = 1;
-    for (let i = 0; i < W; i += 30) {
-      ctx.beginPath();
-      ctx.moveTo(i, 0);
-      ctx.lineTo(i, H);
-      ctx.stroke();
-      ctx.beginPath();
-      ctx.moveTo(0, i);
-      ctx.lineTo(W, i);
-      ctx.stroke();
-    }
-
-    // Draw target rings (concentric)
-    const centerX = W / 2;
-    const centerY = H / 2;
-    const rings = [
-      { r: 120, color: 'rgba(77, 71, 50, 0.3)', score: 1 },
-      { r: 90, color: '#161a1d', border: '#4d4732', score: 3 },
-      { r: 60, color: '#2c3404', border: '#4b5320', score: 5 },
-      { r: 30, color: 'rgba(255, 215, 0, 0.2)', border: '#ffd700', score: 10 },
-    ];
-
-    rings.forEach((ring) => {
-      ctx.beginPath();
-      ctx.arc(centerX, centerY, ring.r, 0, Math.PI * 2);
-      ctx.fillStyle = ring.color;
-      ctx.fill();
-      if (ring.border) {
-        ctx.strokeStyle = ring.border;
-        ctx.lineWidth = 1.5;
-        ctx.stroke();
+    const renderSlider = (scopeKey: string, label: string) => {
+      const currentVal = (values as any)[scopeKey];
+      
+      let defaultVal;
+      if (scopeKey === 'no_scope_3rd' || scopeKey === 'no_scope_1st') {
+        defaultVal = (result.values as any)[category]?.no_scope;
+      } else {
+        defaultVal = (result.values as any)[category]?.[scopeKey];
       }
-    });
+      
+      const isModified = currentVal !== defaultVal;
+      const pct = ((currentVal - 1) / (maxVal - 1)) * 100;
 
-    // Draw Target Bullseye
-    ctx.beginPath();
-    ctx.arc(centerX, centerY, 8, 0, Math.PI * 2);
-    ctx.fillStyle = '#ffd700';
-    ctx.fill();
+      return (
+        <div key={scopeKey} className="space-y-1.5">
+          <div className="flex justify-between items-center h-5">
+            <span className="text-[11px] font-semibold text-[#8eb0c9] tracking-wide uppercase">
+              {label}
+            </span>
+            <div className="flex items-center gap-2">
+              {isModified && (
+                <button
+                  onClick={() => handleResetSlider(category, scopeKey)}
+                  className="text-[9px] font-technical text-primary-yellow hover:underline flex items-center gap-0.5 cursor-pointer"
+                  title="Reset to optimal calculated value"
+                >
+                  <RotateCcw className="w-2.5 h-2.5" />
+                  RESET
+                </button>
+              )}
+              <span className="text-[11px] font-bold font-technical text-[#ffd500] border border-[#233f54] bg-[#090f15] px-2 py-0.5 rounded min-w-[44px] text-center select-none">
+                {currentVal}%
+              </span>
+            </div>
+          </div>
 
-    // Draw Bullet Holes
-    physicsRef.current.bullets.forEach((bullet) => {
-      // Bullet flash fade out
-      const age = Date.now() - bullet.time;
-      const flash = Math.max(0, 1 - age / 120);
+          <div className="flex items-center gap-2">
+            {/* Minus Button */}
+            <button
+              onClick={() => handleSliderChange(category, scopeKey, Math.max(1, currentVal - 1))}
+              className="w-7 h-7 bg-[#101b26] border border-[#223b4f] hover:border-[#00d2ff] hover:text-[#00d2ff] text-[#7ea1bc] flex items-center justify-center font-bold rounded cursor-pointer select-none active:scale-90 transition-all"
+            >
+              <Minus className="w-3.5 h-3.5" />
+            </button>
 
-      ctx.beginPath();
-      ctx.arc(bullet.x, bullet.y, 3.5, 0, Math.PI * 2);
-      ctx.fillStyle = '#000000';
-      ctx.fill();
-      ctx.strokeStyle = '#ffd700';
-      ctx.lineWidth = 1;
-      ctx.stroke();
+            {/* Slider track container */}
+            <div className="flex-1 px-1 flex items-center relative">
+              <input
+                type="range"
+                min="1"
+                max={maxVal}
+                value={currentVal}
+                onChange={(e) => handleSliderChange(category, scopeKey, Number(e.target.value))}
+                className="pubg-slider"
+                style={{
+                  background: `linear-gradient(to right, #00d2ff 0%, #00d2ff ${pct}%, #0e161f ${pct}%, #0e161f 100%)`
+                }}
+              />
+            </div>
 
-      if (flash > 0) {
-        ctx.beginPath();
-        ctx.arc(bullet.x, bullet.y, 7, 0, Math.PI * 2);
-        ctx.fillStyle = `rgba(255, 215, 0, ${flash * 0.7})`;
-        ctx.fill();
-      }
-    });
-
-    // Draw crosshair relative to recoil & drag
-    const x = centerX + physicsRef.current.recoilXOffset - physicsRef.current.dragX;
-    const y = centerY + physicsRef.current.recoilYOffset - physicsRef.current.dragY;
-    physicsRef.current.crosshairX = x;
-    physicsRef.current.crosshairY = y;
-
-    // Draw custom target crosshair
-    ctx.strokeStyle = isFiring ? '#ff3b30' : '#ffd700';
-    ctx.lineWidth = 1.5;
-    
-    // Horizontal line
-    ctx.beginPath();
-    ctx.moveTo(x - 15, y);
-    ctx.lineTo(x - 4, y);
-    ctx.moveTo(x + 4, y);
-    ctx.lineTo(x + 15, y);
-    ctx.stroke();
-
-    // Vertical line
-    ctx.beginPath();
-    ctx.moveTo(x, y - 15);
-    ctx.lineTo(x, y - 4);
-    ctx.moveTo(x, y + 4);
-    ctx.lineTo(x, y + 15);
-    ctx.stroke();
-
-    // Crosshair dot
-    ctx.beginPath();
-    ctx.arc(x, y, 1.5, 0, Math.PI * 2);
-    ctx.fillStyle = isFiring ? '#ff3b30' : '#ffd700';
-    ctx.fill();
-  };
-
-  // Handle Dragging / Recoil pull-down control on Canvas
-  const handleCanvasTouchMove = (e: React.TouchEvent) => {
-    if (!isFiring) return;
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    
-    // Get relative drag speeds based on active scope sensitivity
-    const currentSens = (sensValues.ads as any)[activeSimScope] || 50;
-    const gyroBonus = sensValues.gyro ? ((sensValues.gyro as any)[activeSimScope] || 100) / 250 : 0.4;
-    
-    // Scaling drag effectiveness by sensitivity.
-    const sensitivityScale = (currentSens / 80) * (1 + gyroBonus);
-
-    const touch = e.touches[0];
-    const rect = canvas.getBoundingClientRect();
-    const touchX = touch.clientX - rect.left;
-    const touchY = touch.clientY - rect.top;
-
-    // Simulate simple pull down adjustments
-    const deltaY = rect.height / 2 - touchY;
-    const deltaX = touchX - rect.width / 2;
-
-    physicsRef.current.dragY += deltaY * 0.05 * sensitivityScale;
-    physicsRef.current.dragX -= deltaX * 0.05 * sensitivityScale;
-  };
-
-  const handleCanvasMouseMove = (e: React.MouseEvent) => {
-    if (!isFiring) return;
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-
-    const currentSens = (sensValues.ads as any)[activeSimScope] || 50;
-    const gyroBonus = sensValues.gyro ? ((sensValues.gyro as any)[activeSimScope] || 100) / 250 : 0.4;
-    const sensitivityScale = (currentSens / 80) * (1 + gyroBonus);
-
-    // Track mouse dragging relative movement
-    physicsRef.current.dragY -= e.movementY * 0.4 * sensitivityScale;
-    physicsRef.current.dragX += e.movementX * 0.4 * sensitivityScale;
-  };
-
-  // Start weapon spray loop
-  useEffect(() => {
-    let animationId: number;
-    let bulletTimer: NodeJS.Timeout;
-
-    const updatePhysics = () => {
-      if (!isFiring) return;
-
-      // Recoil push upward
-      let recoilUpSpeed = 1.6;
-      let swaySpeed = 0.5;
-
-      if (activeSimScope === 'scope_3x' || activeSimScope === 'scope_4x') {
-        recoilUpSpeed = 2.4;
-        swaySpeed = 0.8;
-      } else if (activeSimScope === 'scope_6x' || activeSimScope === 'scope_8x') {
-        recoilUpSpeed = 3.5;
-        swaySpeed = 1.4;
-      }
-
-      // Gyro/problem adjustments dampening recoil automatically in simulation
-      if (result.inputs.primaryProblem === 'recoil') {
-        recoilUpSpeed *= 0.82;
-      }
-
-      physicsRef.current.recoilYOffset -= recoilUpSpeed;
-      physicsRef.current.recoilXOffset += (Math.random() - 0.5) * swaySpeed * 5;
-
-      drawCanvas();
-      animationId = requestAnimationFrame(updatePhysics);
+            {/* Plus Button */}
+            <button
+              onClick={() => handleSliderChange(category, scopeKey, Math.min(maxVal, currentVal + 1))}
+              className="w-7 h-7 bg-[#101b26] border border-[#223b4f] hover:border-[#00d2ff] hover:text-[#00d2ff] text-[#7ea1bc] flex items-center justify-center font-bold rounded cursor-pointer select-none active:scale-90 transition-all"
+            >
+              <Plus className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        </div>
+      );
     };
 
-    const fireBullet = () => {
-      if (!isFiring) return;
+    return (
+      <div className="bg-[#0b1219]/90 border border-[#1b3244] rounded-xl p-5 space-y-4 shadow-xl relative overflow-hidden">
+        {/* Subtle grid pattern inside card */}
+        <div className="absolute inset-0 opacity-[0.02] pointer-events-none bg-[linear-gradient(to_right,#00d2ff_1px,transparent_1px),linear-gradient(to_bottom,#00d2ff_1px,transparent_1px)] bg-[size:24px_24px]" />
+        
+        <div className="border-b border-[#1b3244]/60 pb-2 relative z-10">
+          <h3 className="font-headline text-base font-extrabold text-[#9cd8ff] tracking-wide uppercase">
+            {title}
+          </h3>
+          <p className="text-[10px] text-[#69859b] mt-0.5">
+            {desc}
+          </p>
+        </div>
 
-      const x = physicsRef.current.crosshairX + (Math.random() - 0.5) * 8; // bloom
-      const y = physicsRef.current.crosshairY + (Math.random() - 0.5) * 8;
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-4 relative z-10">
+          {/* Left Column */}
+          <div className="space-y-4">
+            {renderSlider('no_scope_3rd', '3rd Person No Scope')}
+            {renderSlider('red_dot', 'Red Dot, Holographic, Aim Assist')}
+            {renderSlider('scope_3x', '3x Scope, Win94')}
+            {renderSlider('scope_6x', '6x Scope')}
+          </div>
 
-      physicsRef.current.bullets.push({
-        x,
-        y,
-        time: Date.now(),
-      });
-
-      setBulletsFired((prev) => prev + 1);
-
-      // Trigger next bullet (M416 fires at ~860 RPM, which is ~70ms between shots)
-      bulletTimer = setTimeout(fireBullet, 70);
-    };
-
-    if (isFiring) {
-      physicsRef.current.lastFrameTime = Date.now();
-      animationId = requestAnimationFrame(updatePhysics);
-      fireBullet();
-    }
-
-    return () => {
-      cancelAnimationFrame(animationId);
-      clearTimeout(bulletTimer);
-    };
-  }, [isFiring, activeSimScope]);
-
-  // Handle accuracy calculation when spray finishes
-  useEffect(() => {
-    if (!isFiring && bulletsFired > 0) {
-      const canvas = canvasRef.current;
-      if (!canvas) return;
-      const centerX = canvas.width / 2;
-      const centerY = canvas.height / 2;
-
-      let scoreTotal = 0;
-      physicsRef.current.bullets.forEach((b) => {
-        const dist = Math.hypot(b.x - centerX, b.y - centerY);
-        if (dist <= 15) scoreTotal += 10;      // Bullseye
-        else if (dist <= 45) scoreTotal += 7;  // Inner Ring
-        else if (dist <= 75) scoreTotal += 5;  // Middle Ring
-        else if (dist <= 110) scoreTotal += 2; // Outer Ring
-      });
-
-      const maxPossible = bulletsFired * 10;
-      const pct = Math.round((scoreTotal / maxPossible) * 100);
-      setAccuracy(pct);
-    }
-  }, [isFiring, bulletsFired]);
-
-  // Initial draw
-  useEffect(() => {
-    drawCanvas();
-  }, [activeSimScope]);
+          {/* Right Column */}
+          <div className="space-y-4">
+            {renderSlider('no_scope_1st', '1st Person No Scope')}
+            {renderSlider('scope_2x', '2x Scope')}
+            {renderSlider('scope_4x', '4x Scope, VSS')}
+            {renderSlider('scope_8x', '8x Scope')}
+          </div>
+        </div>
+      </div>
+    );
+  };
 
   return (
     <div className="space-y-6">
@@ -416,101 +284,75 @@ export default function SensitivityDashboard({ result }: SensitivityDashboardPro
         </button>
       </div>
 
-      {/* Tab Selectors */}
-      <div className="flex border-b border-border-tactical/30 sticky top-0 bg-background/90 backdrop-blur z-20 overflow-x-auto no-scrollbar gap-1 py-1">
-        {[
-          { id: 'camera', label: 'CAMERA SENSITIVITY', show: true },
-          { id: 'ads', label: 'ADS SENSITIVITY', show: true },
-          { id: 'gyro', label: 'GYROSCOPE', show: hasGyro },
-          { id: 'adsGyro', label: 'ADS GYRO', show: hasGyro },
-        ].map(
-          (tab) =>
-            tab.show && (
-              <button
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id as TabType)}
-                className={`whitespace-nowrap px-5 py-3 font-headline font-bold text-sm tracking-wide transition-all border-b-2 active:scale-[0.98] cursor-pointer ${
-                  activeTab === tab.id
-                    ? 'border-primary-yellow text-primary-yellow'
-                    : 'border-transparent text-text-muted hover:text-foreground'
-                }`}
-              >
-                {tab.label}
-              </button>
-            )
+      {/* Dynamic Tactical Analysis Panel with Sub-Tabs */}
+      <div className="bg-[#0b1219]/90 border border-[#1b3244] rounded-xl p-5 space-y-4 shadow-xl relative overflow-hidden animate-scan">
+        <div className="flex border-b border-[#1b3244]/40 pb-2 overflow-x-auto no-scrollbar gap-2">
+          <div className="bg-primary-yellow/15 p-1 rounded-lg h-fit text-primary-yellow flex-shrink-0 mr-1 animate-pulse">
+            <Lightbulb className="w-4 h-4" />
+          </div>
+          {[
+            { id: 'camera', label: 'LOOK ANALYSIS' },
+            { id: 'ads', label: 'ADS RECOIL ANALYSIS' },
+            { id: 'gyro', label: 'GYRO ANALYSIS', show: hasGyro },
+          ].map(
+            (tab) =>
+              (tab.show !== false) && (
+                <button
+                  key={tab.id}
+                  onClick={() => setActiveAnalysisTab(tab.id as TabType)}
+                  className={`text-[10px] font-headline font-bold tracking-widest px-2.5 py-1 transition-all rounded cursor-pointer ${
+                    activeAnalysisTab === tab.id
+                      ? 'bg-primary-yellow/20 text-primary-yellow border border-primary-yellow/30'
+                      : 'text-text-muted hover:text-foreground border border-transparent'
+                  }`}
+                >
+                  {tab.label}
+                </button>
+              )
+          )}
+        </div>
+        <div className="space-y-1">
+          <p className="text-xs text-text-muted leading-relaxed select-none">
+            {getActiveExplanation()}
+          </p>
+        </div>
+      </div>
+
+      {/* PUBG Mobile Themed Sensitivity Cards Stack */}
+      <div className="space-y-5">
+        {renderSensCard(
+          'camera', 
+          'Camera', 
+          'Affects the sensitivity of the camera when the screen is swiped without firing.', 
+          200
+        )}
+        
+        {renderSensCard(
+          'ads', 
+          'ADS Sensitivity', 
+          'Affects the sensitivity of the camera when the screen is swiped while firing. Can be used to keep the barrel down.', 
+          200
+        )}
+
+        {hasGyro && renderSensCard(
+          'gyro', 
+          'Gyroscope', 
+          'When the Gyroscope is activated, the sensitivity of the tilt camera controls can be adjusted.', 
+          400
+        )}
+
+        {hasGyro && renderSensCard(
+          'adsGyro', 
+          'ADS Gyroscope', 
+          'When the Gyroscope is activated, the sensitivity of the tilt camera controls during shooting can be adjusted.', 
+          400
         )}
       </div>
 
-      {/* Tactical Explanation Card */}
-      <div className="bg-gradient-tactical border border-border-tactical/40 rounded-xl p-4 flex gap-4 animate-scan">
-        <div className="bg-primary-yellow/15 p-2.5 rounded-lg h-fit text-primary-yellow animate-pulse-glow flex-shrink-0">
-          <Lightbulb className="w-5 h-5" />
-        </div>
-        <div className="space-y-1">
-          <h4 className="font-headline text-xs font-bold tracking-widest text-primary-yellow uppercase">TACTICAL ANALYSIS</h4>
-          <p className="text-xs text-text-muted leading-relaxed">{getActiveExplanation()}</p>
-        </div>
-      </div>
-
-      {/* Sliders Grid */}
-      <div className="bg-surface-card border border-border-tactical/20 rounded-2xl p-5 space-y-6">
-        <h3 className="font-headline text-lg font-bold text-foreground uppercase border-b border-border-tactical/20 pb-2 tracking-wide flex items-center gap-2">
-          <Sliders className="w-5 h-5 text-primary-yellow" />
-          {activeTab === 'camera' && 'Camera Look Sensitivity'}
-          {activeTab === 'ads' && 'ADS Recoil Sensitivity'}
-          {activeTab === 'gyro' && 'Gyroscope Sensitivity'}
-          {activeTab === 'adsGyro' && 'ADS Gyroscope Sensitivity'}
-        </h3>
-
-        <div className="space-y-5">
-          {Object.keys(scopeLabels).map((scopeKey) => {
-            const currentVal = (sensValues[activeTab] as any)?.[scopeKey] || 0;
-            const originalVal = (result.values as any)[activeTab]?.[scopeKey] || 0;
-            const isModified = currentVal !== originalVal;
-
-            return (
-              <div key={scopeKey} className="space-y-2.5">
-                <div className="flex justify-between items-end">
-                  <span className="font-technical text-xs tracking-wider text-foreground font-semibold uppercase">
-                    {scopeLabels[scopeKey]}
-                  </span>
-                  <div className="flex items-center gap-2">
-                    {isModified && (
-                      <button
-                        onClick={() => handleResetSlider(activeTab, scopeKey)}
-                        className="text-[10px] font-technical text-primary-yellow hover:underline flex items-center gap-0.5 cursor-pointer"
-                        title="Reset to calculated optimal value"
-                      >
-                        <RotateCcw className="w-3 h-3" />
-                        RESET
-                      </button>
-                    )}
-                    <span className="font-headline text-base font-extrabold text-primary-yellow w-12 text-right">
-                      {currentVal}%
-                    </span>
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-4">
-                  <input
-                    type="range"
-                    min="1"
-                    max={activeTab.includes('gyro') ? '400' : '200'}
-                    value={currentVal}
-                    onChange={(e) => handleSliderChange(activeTab, scopeKey, Number(e.target.value))}
-                  />
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* Recoil Shooting Range Simulator (Interactive Animations) */}
-      {/* Recoil Shooting Range Simulator (Coming Soon Placeholder) */}
-      <div className="bg-surface-card border border-border-tactical/20 rounded-2xl p-5 space-y-4 relative overflow-hidden">
-        <div className="flex justify-between items-center border-b border-border-tactical/20 pb-2">
-          <h3 className="font-headline text-lg font-bold text-foreground uppercase tracking-wide flex items-center gap-2">
+      {/* Shooting Range Simulator (Coming Soon Placeholder) */}
+      <div className="bg-[#0b1219]/90 border border-[#1b3244] rounded-xl p-5 space-y-4 relative overflow-hidden">
+        <div className="flex justify-between items-center border-b border-[#1b3244]/60 pb-2">
+          <h3 className="font-headline text-base font-extrabold text-[#9cd8ff] tracking-wide uppercase flex items-center gap-2">
             <Target className="w-5 h-5 text-primary-yellow animate-pulse" />
             SHOOTING RANGE SIMULATOR
           </h3>
@@ -519,8 +361,7 @@ export default function SensitivityDashboard({ result }: SensitivityDashboardPro
           </span>
         </div>
 
-        <div className="relative border border-border-tactical/15 rounded-xl bg-background/40 p-8 text-center flex flex-col items-center justify-center min-h-[220px] overflow-hidden">
-          {/* Tactical grid background effect */}
+        <div className="relative border border-[#1b3244]/30 rounded-xl bg-background/20 p-8 text-center flex flex-col items-center justify-center min-h-[200px] overflow-hidden">
           <div className="absolute inset-0 opacity-[0.03] pointer-events-none bg-[linear-gradient(to_right,#ffd700_1px,transparent_1px),linear-gradient(to_bottom,#ffd700_1px,transparent_1px)] bg-[size:15px_15px]" />
           
           <div className="relative z-10 space-y-3 max-w-sm">
@@ -528,7 +369,7 @@ export default function SensitivityDashboard({ result }: SensitivityDashboardPro
               <Target className="w-6 h-6" />
             </div>
             <h4 className="font-headline text-sm font-extrabold text-foreground tracking-wider uppercase">PHYSICS ENGINE CALIBRATION</h4>
-            <p className="text-xs text-text-muted leading-relaxed">
+            <p className="text-xs text-[#69859b] leading-relaxed">
               Our interactive 3D weapon recoil simulator is currently undergoing server-side physics engine calibration. Check back soon to test your sensitivity configurations.
             </p>
           </div>

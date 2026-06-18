@@ -68,7 +68,17 @@ export default async function ResultPage({ params }: PageProps) {
   }
 
 
-  const { deviceTier, fps, gyroMode, fingerCount, playstyle, primaryProblem } = result.inputs;
+  const {
+    deviceTier,
+    fps,
+    gyroMode,
+    fingerCount,
+    playstyle,
+    primaryProblem,
+    measuredSwipeSpeed,
+    measuredLatencyMs,
+    gyroStabilityScore
+  } = result.inputs;
 
   return (
     <div className="flex-1 flex flex-col justify-between max-w-lg mx-auto w-full px-4 pt-6 pb-12 bg-background min-h-screen">
@@ -112,6 +122,24 @@ export default async function ResultPage({ params }: PageProps) {
             <span className="text-[10px] text-text-muted uppercase tracking-wider">AIM OFFSET FIX</span>
             <span className="font-semibold uppercase">{primaryProblem} LIMIT</span>
           </div>
+          {measuredLatencyMs !== undefined && (
+            <div className="flex flex-col gap-0.5">
+              <span className="text-[10px] text-text-muted uppercase tracking-wider">TOUCH RESPONSE</span>
+              <span className="font-semibold uppercase text-primary-yellow">{measuredLatencyMs}ms ({(measuredLatencyMs < 80) ? 'ULTRA' : (measuredLatencyMs > 130) ? 'SLOW' : 'STANDARD'})</span>
+            </div>
+          )}
+          {measuredSwipeSpeed !== undefined && (
+            <div className="flex flex-col gap-0.5">
+              <span className="text-[10px] text-text-muted uppercase tracking-wider">SWIPE GLIDE</span>
+              <span className="font-semibold uppercase text-primary-yellow">{Math.round(measuredSwipeSpeed * 100)}% SPEED</span>
+            </div>
+          )}
+          {gyroStabilityScore !== undefined && gyroMode !== 'off' && (
+            <div className="flex flex-col gap-0.5 col-span-2">
+              <span className="text-[10px] text-text-muted uppercase tracking-wider">GYRO SENSOR STABILITY</span>
+              <span className="font-semibold uppercase text-primary-yellow">{Math.round(gyroStabilityScore * 100)}% ({(gyroStabilityScore > 0.9) ? 'EXCELLENT' : (gyroStabilityScore < 0.6) ? 'JITTERY' : 'STABLE'})</span>
+            </div>
+          )}
         </div>
       </section>
 

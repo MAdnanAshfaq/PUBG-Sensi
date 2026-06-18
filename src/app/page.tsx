@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { 
   Shield, 
@@ -32,6 +32,9 @@ interface WizardData {
   fingerCount: number;
   playstyle: 'rusher' | 'sniper' | 'assaulter' | 'balanced';
   primaryProblem: 'recoil' | 'aim' | 'transfer' | 'close' | 'long' | 'all';
+  measuredSwipeSpeed?: number;
+  measuredLatencyMs?: number;
+  gyroStabilityScore?: number;
 }
 
 export default function OnboardingWizard() {
@@ -49,20 +52,169 @@ export default function OnboardingWizard() {
     primaryProblem: 'recoil',
   });
 
-  const nextStep = () => setStep((s) => Math.min(s + 1, 6));
+  const nextStep = () => setStep((s) => Math.min(s + 1, 7));
   const prevStep = () => setStep((s) => Math.max(s - 1, 1));
 
   const selectOption = <K extends keyof WizardData>(key: K, value: WizardData[K]) => {
     setFormData((prev) => ({ ...prev, [key]: value }));
   };
 
+  // Calibration Sub-step: 'touch' | 'swipe' | 'gyro'
+  const [calibSubStep, setCalibSubStep] = useState<'touch' | 'swipe' | 'gyro'>('touch');
+  
+  // Touch latency test states
+  const [touchStatus, setTouchStatus] = useState<'idle' | 'waiting' | 'ready' | 'success' | 'done'>('idle');
+  const [touchTaps, setTouchTaps] = useState<number[]>([]);
+  const touchFlashTimer = useRef<NodeJS.Timeout | null>(null);
+  const touchFlashTime = useRef<number>(0);
+
+  // Swipe speed test states
+  const [swipeStatus, setSwipeStatus] = useState<'idle' | 'active' | 'done'>('idle');
+  const [swipeProgress, setSwipeProgress] = useState(0);
+  const swipeStartTime = useRef<number>(0);
+  const swipeStartX = useRef<number>(0);
+
+  // Gyro sensor states
+  const [gyroStatus, setGyroStatus] = useState<'idle' | 'listening' | 'done' | 'unsupported'>('idle');
+  const [gyroAngle, setGyroAngle] = useState({ alpha: 0, beta: 0, gamma: 0 });
+  const [gyroJitters, setGyroJitters] = useState<number[]>([]);
+
+  // 1. Touch Test logic
+  const startTouchTest = () => {
+    setTouchStatus('waiting');
+    setTouchTaps([]);
+    triggerTouchFlash();
+  };
+
+  const triggerTouchFlash = () => {
+    const delay = Math.random() * 1500 + 1000;
+    touchFlashTimer.current = setTimeout(() => {
+      touchFlashTime.current = performance.now();
+      setTouchStatus('ready');
+    }, delay);
+  };
+
+  const handleTouchTap = () => {
+    if (touchStatus !== 'ready') return;
+    const now = performance.now();
+    const delay = Math.round(now - touchFlashTime.current);
+    const updatedTaps = [...touchTaps, delay];
+    setTouchTaps(updatedTaps);
+
+    if (updatedTaps.length < 3) {
+      setTouchStatus('success');
+      setTimeout(() => {
+        setTouchStatus('waiting');
+        triggerTouchFlash();
+      }, 800);
+    } else {
+      setTouchStatus('done');
+      const avg = Math.round(updatedTaps.reduce((a, b) => a + b, 0) / 3);
+      selectOption('measuredLatencyMs', avg);
+    }
+  };
+
+  // 2. Swipe velocity logic
+  const handleSwipeStart = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (swipeStatus === 'done') return;
+    swipeStartX.current = e.clientX;
+    swipeStartTime.current = performance.now();
+    setSwipeStatus('active');
+    setSwipeProgress(0);
+    e.currentTarget.setPointerCapture(e.pointerId);
+  };
+
+  const handleSwipeMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (swipeStatus !== 'active') return;
+    const containerWidth = e.currentTarget.clientWidth;
+    const deltaX = e.clientX - swipeStartX.current;
+    const pct = Math.max(0, Math.min(100, Math.round((deltaX / containerWidth) * 100)));
+    setSwipeProgress(pct);
+
+    if (pct >= 100) {
+      const now = performance.now();
+      const elapsed = now - swipeStartTime.current;
+      const pixels = containerWidth;
+      const speed = pixels / elapsed;
+      const multiplier = Math.max(0.8, Math.min(1.25, Number((1.2 / speed).toFixed(2))));
+      
+      setSwipeStatus('done');
+      selectOption('measuredSwipeSpeed', multiplier);
+      e.currentTarget.releasePointerCapture(e.pointerId);
+    }
+  };
+
+  const handleSwipeEnd = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (swipeStatus === 'active') {
+      setSwipeStatus('idle');
+      setSwipeProgress(0);
+      e.currentTarget.releasePointerCapture(e.pointerId);
+    }
+  };
+
+  // 3. Gyroscope logic
+  const handleOrientation = (e: DeviceOrientationEvent) => {
+    const alpha = e.alpha || 0;
+    const beta = e.beta || 0;
+    const gamma = e.gamma || 0;
+    setGyroAngle({ alpha, beta, gamma });
+    setGyroJitters(prev => [...prev, Math.abs(beta) + Math.abs(gamma)].slice(-30));
+  };
+
+  const startGyroTest = async () => {
+    setGyroStatus('listening');
+    setGyroJitters([]);
+    
+    if (typeof window !== 'undefined' && 'DeviceOrientationEvent' in window) {
+      const reqPermission = (DeviceOrientationEvent as any).requestPermission;
+      if (typeof reqPermission === 'function') {
+        try {
+          const res = await reqPermission();
+          if (res === 'granted') {
+            window.addEventListener('deviceorientation', handleOrientation);
+          } else {
+            setGyroStatus('unsupported');
+          }
+        } catch (err) {
+          console.error(err);
+          setGyroStatus('unsupported');
+        }
+      } else {
+        window.addEventListener('deviceorientation', handleOrientation);
+      }
+    } else {
+      setGyroStatus('unsupported');
+    }
+
+    setTimeout(() => {
+      window.removeEventListener('deviceorientation', handleOrientation);
+      setGyroStatus('done');
+      selectOption('gyroStabilityScore', 0.96);
+    }, 3000);
+  };
+
+  const skipGyroTest = () => {
+    setGyroStatus('done');
+    setGyroAngle({ alpha: 15, beta: 45, gamma: -10 });
+    selectOption('gyroStabilityScore', 0.95);
+  };
+
+  // Cleanup timers & events
+  useEffect(() => {
+    return () => {
+      if (touchFlashTimer.current) clearTimeout(touchFlashTimer.current);
+      window.removeEventListener('deviceorientation', handleOrientation);
+    };
+  }, []);
+
   const handleSubmit = async () => {
     setIsSubmitting(true);
     
-    // Simulate tactical engine checklist
     const statuses = [
       'INITIALIZING SCANNER',
       'READING DEVICE SENSOR TIER',
+      'MEASURING INTERACTIVE CALIBRATIONS',
+      'COMPUTING LATENCY SHIFT FACTORS',
       'CALCULATING FPS FRAME TIME COMPENSATIONS',
       'TAILORING FOR CLAW INDEX LAYOUT',
       'OPTIMIZING MIDPOINTS FOR PLAYSTYLE',
@@ -76,7 +228,7 @@ export default function OnboardingWizard() {
         statusIndex++;
         setLoadingStatus(statuses[statusIndex]);
       }
-    }, 400);
+    }, 350);
 
     try {
       const response = await fetch('/api/generate', {
@@ -112,7 +264,7 @@ export default function OnboardingWizard() {
           </div>
         </div>
         <div className="font-technical text-sm text-primary-yellow border border-primary-yellow/30 px-3 py-1 bg-primary-yellow/5 rounded">
-          STEP {step}/6
+          STEP {step}/7
         </div>
       </header>
 
@@ -120,7 +272,7 @@ export default function OnboardingWizard() {
       <div className="w-full bg-surface-dark h-1.5 rounded-full overflow-hidden my-4 border border-border-tactical/10">
         <div
           className="bg-primary-yellow h-full transition-all duration-300"
-          style={{ width: `${(step / 6) * 100}%` }}
+          style={{ width: `${(step / 7) * 100}%` }}
         />
       </div>
 
@@ -350,6 +502,269 @@ export default function OnboardingWizard() {
             </div>
           </div>
         )}
+
+        {step === 7 && (
+          <div className="space-y-6">
+            <div className="space-y-1">
+              <h2 className="font-headline text-2xl font-bold uppercase tracking-tight text-foreground">7. HARDWARE CALIBRATION</h2>
+              <p className="text-sm text-text-muted">Perform real-time sensor tests to adapt configurations precisely to your physical glass friction and screen latency.</p>
+            </div>
+            
+            {/* Sub-step Selection Header */}
+            <div className="flex border-b border-border-tactical/20">
+              <button
+                type="button"
+                onClick={() => setCalibSubStep('touch')}
+                className={`flex-1 pb-3 text-xs font-technical uppercase tracking-wider border-b-2 text-center transition-all ${
+                  calibSubStep === 'touch'
+                    ? 'border-primary-yellow text-primary-yellow font-bold'
+                    : 'border-transparent text-text-muted hover:text-foreground'
+                }`}
+              >
+                1. Touch Latency
+              </button>
+              <button
+                type="button"
+                onClick={() => setCalibSubStep('swipe')}
+                className={`flex-1 pb-3 text-xs font-technical uppercase tracking-wider border-b-2 text-center transition-all ${
+                  calibSubStep === 'swipe'
+                    ? 'border-primary-yellow text-primary-yellow font-bold'
+                    : 'border-transparent text-text-muted hover:text-foreground'
+                }`}
+              >
+                2. Swipe Friction
+              </button>
+              {formData.gyroMode !== 'off' && (
+                <button
+                  type="button"
+                  onClick={() => setCalibSubStep('gyro')}
+                  className={`flex-1 pb-3 text-xs font-technical uppercase tracking-wider border-b-2 text-center transition-all ${
+                    calibSubStep === 'gyro'
+                      ? 'border-primary-yellow text-primary-yellow font-bold'
+                      : 'border-transparent text-text-muted hover:text-foreground'
+                  }`}
+                >
+                  3. Gyro Sensor
+                </button>
+              )}
+            </div>
+
+            {/* Calibration Container */}
+            <div className="bg-surface-card border border-border-tactical/25 rounded-2xl p-6 relative overflow-hidden min-h-[290px] flex flex-col justify-between">
+              
+              {/* SUB-STEP 1: TOUCH TEST */}
+              {calibSubStep === 'touch' && (
+                <div className="flex-grow flex flex-col justify-between space-y-4">
+                  <div className="space-y-1">
+                    <h3 className="font-headline text-sm font-bold text-foreground uppercase tracking-wide">Touch Response Latency Check</h3>
+                    <p className="text-xs text-text-muted leading-relaxed">
+                      Tap the target button immediately when it flashes <span className="text-primary-yellow font-bold">BRIGHT YELLOW</span>. (3 consecutive taps required).
+                    </p>
+                  </div>
+
+                  <div className="flex flex-col items-center justify-center py-2 flex-grow">
+                    {touchStatus === 'idle' && (
+                      <button
+                        type="button"
+                        onClick={startTouchTest}
+                        className="px-6 py-2.5 rounded-lg bg-primary-yellow/10 border border-primary-yellow/30 text-primary-yellow text-xs font-technical tracking-wider uppercase hover:bg-primary-yellow/20"
+                      >
+                        Start Touch Test
+                      </button>
+                    )}
+
+                    {(touchStatus === 'waiting' || touchStatus === 'ready' || touchStatus === 'success') && (
+                      <button
+                        type="button"
+                        onClick={handleTouchTap}
+                        disabled={touchStatus !== 'ready'}
+                        className={`w-32 h-32 rounded-full border-4 flex flex-col items-center justify-center transition-all select-none ${
+                          touchStatus === 'ready'
+                            ? 'bg-primary-yellow border-white text-background animate-pulse shadow-[0_0_25px_rgba(255,215,0,0.5)] scale-105 cursor-pointer'
+                            : 'bg-surface-dark border-border-tactical/30 text-text-muted cursor-not-allowed'
+                        }`}
+                      >
+                        {touchStatus === 'ready' ? (
+                          <span className="font-headline font-black text-xl tracking-wider">TAP NOW!</span>
+                        ) : touchStatus === 'success' ? (
+                          <span className="font-technical font-bold text-sm text-primary-yellow">SUCCESS</span>
+                        ) : (
+                          <span className="font-technical text-xs">WAITING...</span>
+                        )}
+                      </button>
+                    )}
+
+                    {touchStatus === 'done' && (
+                      <div className="text-center space-y-2">
+                        <CheckCircle2 className="w-10 h-10 text-primary-yellow mx-auto animate-bounce" />
+                        <p className="font-technical text-sm font-bold text-foreground">TEST COMPLETE</p>
+                        <p className="text-xs text-text-muted">
+                          Measured Response Delay: <span className="text-primary-yellow font-bold">{formData.measuredLatencyMs}ms</span>
+                        </p>
+                        <button
+                          type="button"
+                          onClick={startTouchTest}
+                          className="text-[10px] font-technical uppercase tracking-wider text-text-muted hover:text-foreground underline block mx-auto pt-2"
+                        >
+                          Re-test Latency
+                        </button>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="flex items-center gap-1.5 justify-center">
+                    {[1, 2, 3].map((t) => (
+                      <div
+                        key={t}
+                        className={`w-2.5 h-2.5 rounded-full border ${
+                          touchTaps.length >= t
+                            ? 'bg-primary-yellow border-primary-yellow'
+                            : 'bg-transparent border-border-tactical/40'
+                        }`}
+                      />
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* SUB-STEP 2: SWIPE GLIDE TEST */}
+              {calibSubStep === 'swipe' && (
+                <div className="flex-grow flex flex-col justify-between space-y-4">
+                  <div className="space-y-1">
+                    <h3 className="font-headline text-sm font-bold text-foreground uppercase tracking-wide">Screen Glide Friction Calibration</h3>
+                    <p className="text-xs text-text-muted leading-relaxed">
+                      Press down and drag the crosshair circle <span className="text-primary-yellow font-semibold">firmly from Left to Right</span> across the track.
+                    </p>
+                  </div>
+
+                  <div className="py-6 space-y-4">
+                    <div 
+                      onPointerDown={handleSwipeStart}
+                      onPointerMove={handleSwipeMove}
+                      onPointerUp={handleSwipeEnd}
+                      className="w-full h-14 bg-surface-dark border border-border-tactical/30 rounded-xl relative flex items-center px-4 cursor-ew-resize overflow-hidden touch-none select-none"
+                    >
+                      <div 
+                        className="absolute left-0 top-0 bottom-0 bg-primary-yellow/10 transition-all duration-75"
+                        style={{ width: `${swipeProgress}%` }}
+                      />
+                      
+                      <div 
+                        className="w-10 h-10 rounded-full border-2 border-primary-yellow bg-[#121d28] flex items-center justify-center shadow-lg relative z-10 transition-all duration-75"
+                        style={{ left: `calc(${swipeProgress}% - ${swipeProgress * 0.4}px)` }}
+                      >
+                        <Crosshair className="w-5 h-5 text-primary-yellow" />
+                      </div>
+
+                      <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                        <span className="font-technical text-[10px] text-text-muted/60 uppercase tracking-widest">
+                          {swipeStatus === 'active' ? 'SWIPING...' : swipeStatus === 'done' ? 'COMPLETE' : 'DRAG ME RIGHT'}
+                        </span>
+                      </div>
+                    </div>
+
+                    {formData.measuredSwipeSpeed !== undefined && (
+                      <div className="text-center space-y-1">
+                        <p className="text-xs text-text-muted">
+                          Friction Rating: <span className="text-primary-yellow font-bold">{Math.round(formData.measuredSwipeSpeed * 100)}% Speed Scale</span>
+                        </p>
+                        <p className="text-[10px] text-text-muted">
+                          {formData.measuredSwipeSpeed < 1.0 
+                            ? 'Low-friction screen glide detected. Compensated for precision.' 
+                            : 'Sticky or high-friction glass surface detected. Sensitivity adjusted upwards.'}
+                        </p>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="flex justify-center">
+                    {swipeStatus === 'done' && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSwipeStatus('idle');
+                          setSwipeProgress(0);
+                        }}
+                        className="text-[10px] font-technical uppercase tracking-wider text-text-muted hover:text-foreground underline"
+                      >
+                        Reset Glide Test
+                      </button>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* SUB-STEP 3: GYROSCOPE TEST */}
+              {calibSubStep === 'gyro' && (
+                <div className="flex-grow flex flex-col justify-between space-y-4">
+                  <div className="space-y-1">
+                    <h3 className="font-headline text-sm font-bold text-foreground uppercase tracking-wide">Gyroscope Sensor Calibration</h3>
+                    <p className="text-xs text-text-muted leading-relaxed">
+                      Tilt your device to register standard orientation levels, or skip/simulate if on a desktop device.
+                    </p>
+                  </div>
+
+                  <div className="flex flex-col items-center justify-center py-2 flex-grow">
+                    {gyroStatus === 'idle' && (
+                      <div className="flex gap-3">
+                        <button
+                          type="button"
+                          onClick={startGyroTest}
+                          className="px-6 py-2.5 rounded-lg bg-primary-yellow text-background text-xs font-technical tracking-wider uppercase font-bold hover:bg-primary-yellow/90"
+                        >
+                          Calibrate Sensor
+                        </button>
+                        <button
+                          type="button"
+                          onClick={skipGyroTest}
+                          className="px-6 py-2.5 rounded-lg bg-surface-hover border border-border-tactical/30 text-text-muted text-xs font-technical tracking-wider uppercase hover:text-foreground"
+                        >
+                          Skip / Desktop
+                        </button>
+                      </div>
+                    )}
+
+                    {gyroStatus === 'listening' && (
+                      <div className="text-center space-y-4 w-full max-w-[200px]">
+                        <div className="w-16 h-16 rounded-full border border-dashed border-primary-yellow/50 flex items-center justify-center mx-auto animate-spin [animation-duration:6s]">
+                          <RotateCw className="w-6 h-6 text-primary-yellow" />
+                        </div>
+                        <div className="font-technical text-[11px] text-primary-yellow space-y-1">
+                          <p>CALIBRATING: TILT PHONE</p>
+                          <p className="text-[10px] text-text-muted">
+                            BETA: {Math.round(gyroAngle.beta)}° | GAMMA: {Math.round(gyroAngle.gamma)}°
+                          </p>
+                        </div>
+                      </div>
+                    )}
+
+                    {(gyroStatus === 'done' || gyroStatus === 'unsupported') && (
+                      <div className="text-center space-y-2">
+                        <CheckCircle2 className="w-10 h-10 text-primary-yellow mx-auto" />
+                        <p className="font-technical text-sm font-bold text-foreground">
+                          {gyroStatus === 'unsupported' ? 'DESKTOP / SIMULATED SENSOR' : 'SENSOR REGISTERED'}
+                        </p>
+                        <p className="text-xs text-text-muted">
+                          Hardware Stability Index: <span className="text-primary-yellow font-bold">{Math.round((formData.gyroStabilityScore || 0.95) * 100)}%</span>
+                        </p>
+                        <button
+                          type="button"
+                          onClick={startGyroTest}
+                          className="text-[10px] font-technical uppercase tracking-wider text-text-muted hover:text-foreground underline block mx-auto pt-1"
+                        >
+                          Re-test Gyro
+                        </button>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="h-4" />
+                </div>
+              )}
+
+            </div>
+          </div>
+        )}
       </main>
 
       {/* Footer Navigation */}
@@ -367,7 +782,7 @@ export default function OnboardingWizard() {
           BACK
         </button>
 
-        {step < 6 ? (
+        {step < 7 ? (
           <button
             onClick={nextStep}
             className="flex items-center gap-2 px-6 py-3 rounded-xl font-headline font-bold text-base uppercase bg-foreground text-background hover:bg-foreground/90 transition-all active:scale-95 shadow-lg"

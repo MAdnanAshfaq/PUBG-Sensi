@@ -20,6 +20,9 @@ export interface UserInputs {
   fingerCount: number;
   playstyle: Playstyle;
   primaryProblem: PrimaryProblem;
+  measuredSwipeSpeed?: number;
+  measuredLatencyMs?: number;
+  gyroStabilityScore?: number;
 }
 
 export type ScopeTier = 'no_scope' | 'red_dot' | 'scope_2x' | 'scope_3x' | 'scope_4x' | 'scope_6x' | 'scope_8x';
@@ -187,6 +190,30 @@ function calculateScopeValue(
   if ((inputs.primaryProblem === 'long' || inputs.primaryProblem === 'all') && isLongRangeOptic) {
     if (category === 'camera' || category === 'ads') {
       multiplier *= 0.90;
+    }
+  }
+
+  // Real-Time Hardware Calibration Adjustments
+  if (inputs.measuredSwipeSpeed !== undefined && (category === 'camera' || category === 'ads')) {
+    // scale based on user's physical swipe glide speed (standard is 1.0)
+    multiplier *= inputs.measuredSwipeSpeed;
+  }
+
+  if (inputs.measuredLatencyMs !== undefined && (category === 'camera' || category === 'ads')) {
+    // If high latency screen, boost slightly to compensate for lag. If low latency, optimize for precision.
+    if (inputs.measuredLatencyMs > 130) {
+      multiplier *= 1.06;
+    } else if (inputs.measuredLatencyMs < 80) {
+      multiplier *= 0.97;
+    }
+  }
+
+  if (inputs.gyroStabilityScore !== undefined && (category === 'gyro' || category === 'ads_gyro')) {
+    // If gyroscope displays jitter/noise, scale values down. If stable, allow slight boost.
+    if (inputs.gyroStabilityScore < 0.6) {
+      multiplier *= 0.88;
+    } else if (inputs.gyroStabilityScore > 0.9) {
+      multiplier *= 1.04;
     }
   }
 

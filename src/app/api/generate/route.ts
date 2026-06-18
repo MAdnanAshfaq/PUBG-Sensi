@@ -20,6 +20,9 @@ export async function POST(req: NextRequest) {
       fingerCount: Number(body.fingerCount) || 4,
       playstyle: body.playstyle || 'balanced',
       primaryProblem: body.primaryProblem || 'recoil',
+      measuredSwipeSpeed: body.measuredSwipeSpeed !== undefined ? Number(body.measuredSwipeSpeed) : undefined,
+      measuredLatencyMs: body.measuredLatencyMs !== undefined ? Number(body.measuredLatencyMs) : undefined,
+      gyroStabilityScore: body.gyroStabilityScore !== undefined ? Number(body.gyroStabilityScore) : undefined,
     };
 
     // 1. Deterministic Calculation

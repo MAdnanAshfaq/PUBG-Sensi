@@ -1,0 +1,114 @@
+{
+  "955ae419": {
+    "slug": "955ae419",
+    "inputs": {
+      "deviceTier": "flagship",
+      "fps": 90,
+      "gyroMode": "always_on",
+      "fingerCount": 4,
+      "playstyle": "rusher",
+      "primaryProblem": "recoil"
+    },
+    "values": {
+      "camera": {
+        "no_scope": 129,
+        "red_dot": 62,
+        "scope_2x": 47,
+        "scope_3x": 36,
+        "scope_4x": 26,
+        "scope_6x": 18,
+        "scope_8x": 11
+      },
+      "ads": {
+        "no_scope": 117,
+        "red_dot": 68,
+        "scope_2x": 49,
+        "scope_3x": 35,
+        "scope_4x": 26,
+        "scope_6x": 15,
+        "scope_8x": 10
+      },
+      "gyro": {
+        "no_scope": 394,
+        "red_dot": 370,
+        "scope_2x": 345,
+        "scope_3x": 278,
+        "scope_4x": 215,
+        "scope_6x": 121,
+        "scope_8x": 77
+      },
+      "adsGyro": {
+        "no_scope": 394,
+        "red_dot": 370,
+        "scope_2x": 345,
+        "scope_3x": 278,
+        "scope_4x": 215,
+        "scope_6x": 121,
+        "scope_8x": 77
+      }
+    },
+    "explanations": {
+      "camera_explanation": "Camera sensitivity is boosted for close-range combat. Since you play as a rusher with a 4-finger setup, you need high swipe speeds to rotate your camera instantly and track opponents jumping or sliding nearby.",
+      "ads_explanation": "ADS sensitivity has been adjusted to help with pull-down mechanics. Since recoil is your primary obstacle, these values give your thumb enough leverage to easily pull down the firing button and stabilize vertical muzzle climb.",
+      "gyro_explanation": "Gyroscope values are scaled up on mid-tier scopes (3x and 4x) by 15%. This allows you to tilt your device slightly to counter rapid vertical recoil, taking the strain off your screen-swiping finger.",
+      "ads_gyro_explanation": "ADS-Gyroscope values are set high. This ensures that when you press the fire button and tilt your phone simultaneously, the vertical compensation kicks in immediately to laser-focus your bullet grouping."
+    },
+    "createdAt": "2026-06-18T15:00:29.046Z"
+  },
+  "574e2b32": {
+    "slug": "574e2b32",
+    "inputs": {
+      "deviceTier": "flagship",
+      "fps": 90,
+      "gyroMode": "always_on",
+      "fingerCount": 4,
+      "playstyle": "rusher",
+      "primaryProblem": "recoil"
+    },
+    "values": {
+      "camera": {
+        "no_scope": 129,
+        "red_dot": 62,
+        "scope_2x": 47,
+        "scope_3x": 36,
+        "scope_4x": 26,
+        "scope_6x": 18,
+        "scope_8x": 11
+      },
+      "ads": {
+        "no_scope": 117,
+        "red_dot": 68,
+        "scope_2x": 49,
+        "scope_3x": 35,
+        "scope_4x": 26,
+        "scope_6x": 15,
+        "scope_8x": 10
+      },
+      "gyro": {
+        "no_scope": 394,
+        "red_dot": 370,
+        "scope_2x": 345,
+        "scope_3x": 278,
+        "scope_4x": 215,
+        "scope_6x": 121,
+        "scope_8x": 77
+      },
+      "adsGyro": {
+        "no_scope": 394,
+        "red_dot": 370,
+        "scope_2x": 345,
+        "scope_3x": 278,
+        "scope_4x": 215,
+        "scope_6x": 121,
+        "scope_8x": 77
+      }
+    },
+    "explanations": {
+      "camera_explanation": "Camera sensitivity is boosted for close-range combat. Since you play as a rusher with a 4-finger setup, you need high swipe speeds to rotate your camera instantly and track opponents jumping or sliding nearby.",
+      "ads_explanation": "ADS sensitivity has been adjusted to help with pull-down mechanics. Since recoil is your primary obstacle, these values give your thumb enough leverage to easily pull down the firing button and stabilize vertical muzzle climb.",
+      "gyro_explanation": "Gyroscope values are scaled up on mid-tier scopes (3x and 4x) by 15%. This allows you to tilt your device slightly to counter rapid vertical recoil, taking the strain off your screen-swiping finger.",
+      "ads_gyro_explanation": "ADS-Gyroscope values are set high. This ensures that when you press the fire button and tilt your phone simultaneously, the vertical compensation kicks in immediately to laser-focus your bullet grouping."
+    },
+    "createdAt": "2026-06-18T15:08:19.135Z"
+  }
+}

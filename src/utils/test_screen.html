@@ -1,0 +1,349 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0, viewport-fit=cover" name="viewport"/>
+<title>TACTICAL_SENS | PUBG Config</title>
+<!-- Fonts -->
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=Inter:wght@400;500&family=Space+Mono:wght@700&family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@100..900&family=Inter:wght@100..900&family=Space+Mono:wght@100..900&display=swap" rel="stylesheet"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<!-- Design System Config -->
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            "colors": {
+                    "on-secondary-fixed-variant": "#434b18",
+                    "primary-container": "#ffd700",
+                    "on-primary-fixed-variant": "#544600",
+                    "tertiary-fixed-dim": "#c2cb9a",
+                    "primary-fixed-dim": "#e9c400",
+                    "outline-variant": "#4d4732",
+                    "background": "#121416",
+                    "surface-container-lowest": "#0c0e10",
+                    "on-error-container": "#ffdad6",
+                    "on-secondary-container": "#b1bb7c",
+                    "error": "#ffb4ab",
+                    "primary-fixed": "#ffe16d",
+                    "tertiary-container": "#d5dfac",
+                    "surface-variant": "#333537",
+                    "on-surface-variant": "#d0c6ab",
+                    "surface-tint": "#e9c400",
+                    "on-primary-fixed": "#221b00",
+                    "on-tertiary-container": "#5a633a",
+                    "on-primary": "#3a3000",
+                    "tertiary-fixed": "#dee8b4",
+                    "secondary-fixed": "#dfe8a6",
+                    "on-surface": "#e2e2e5",
+                    "surface-container-high": "#282a2c",
+                    "on-secondary": "#2d3404",
+                    "primary": "#fff6df",
+                    "on-tertiary-fixed-variant": "#424a24",
+                    "inverse-primary": "#705d00",
+                    "tertiary": "#f2fcc7",
+                    "outline": "#999077",
+                    "surface-container": "#1e2022",
+                    "on-background": "#e2e2e5",
+                    "surface-bright": "#38393c",
+                    "on-primary-container": "#705e00",
+                    "secondary-container": "#434b18",
+                    "secondary": "#c3cc8c",
+                    "inverse-surface": "#e2e2e5",
+                    "inverse-on-surface": "#2f3033",
+                    "surface-dim": "#121416",
+                    "error-container": "#93000a",
+                    "on-secondary-fixed": "#191e00",
+                    "surface-container-low": "#1a1c1e",
+                    "secondary-fixed-dim": "#c3cc8c",
+                    "on-tertiary": "#2c3410",
+                    "surface-container-highest": "#333537",
+                    "on-tertiary-fixed": "#171e01",
+                    "on-error": "#690005",
+                    "surface": "#121416"
+            },
+            "borderRadius": {
+                    "DEFAULT": "0.125rem",
+                    "lg": "0.25rem",
+                    "xl": "0.5rem",
+                    "full": "0.75rem"
+            },
+            "spacing": {
+                    "gutter": "16px",
+                    "unit": "4px",
+                    "margin-mobile": "16px",
+                    "margin-desktop": "40px",
+                    "container-padding": "24px"
+            },
+            "fontFamily": {
+                    "label-caps": ["Space Mono"],
+                    "headline-md": ["Barlow Condensed"],
+                    "stats-num": ["Barlow Condensed"],
+                    "headline-lg-mobile": ["Barlow Condensed"],
+                    "body-md": ["Inter"],
+                    "body-lg": ["Inter"],
+                    "display-lg": ["Barlow Condensed"],
+                    "headline-lg": ["Barlow Condensed"]
+            },
+            "fontSize": {
+                    "label-caps": ["12px", {"lineHeight": "16px", "letterSpacing": "0.1em", "fontWeight": "700"}],
+                    "headline-md": ["24px", {"lineHeight": "28px", "fontWeight": "600"}],
+                    "stats-num": ["20px", {"lineHeight": "24px", "fontWeight": "700"}],
+                    "headline-lg-mobile": ["24px", {"lineHeight": "28px", "fontWeight": "700"}],
+                    "body-md": ["16px", {"lineHeight": "24px", "fontWeight": "400"}],
+                    "body-lg": ["18px", {"lineHeight": "28px", "fontWeight": "400"}],
+                    "display-lg": ["48px", {"lineHeight": "52px", "letterSpacing": "0.02em", "fontWeight": "700"}],
+                    "headline-lg": ["32px", {"lineHeight": "36px", "letterSpacing": "0.01em", "fontWeight": "700"}]
+            }
+          },
+        },
+      }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+            vertical-align: middle;
+        }
+
+        /* Tactical Slider Styling */
+        input[type="range"] {
+            -webkit-appearance: none;
+            width: 100%;
+            background: transparent;
+        }
+
+        input[type="range"]:focus {
+            outline: none;
+        }
+
+        input[type="range"]::-webkit-slider-runnable-track {
+            width: 100%;
+            height: 12px;
+            cursor: pointer;
+            background: #434b18; /* on-secondary-fixed-variant (Olive) */
+            border-radius: 2px;
+            border: 1px solid rgba(77, 71, 50, 0.3);
+        }
+
+        input[type="range"]::-webkit-slider-thumb {
+            height: 24px;
+            width: 12px;
+            border-radius: 2px;
+            background: #ffd700; /* primary-container (Yellow) */
+            cursor: pointer;
+            -webkit-appearance: none;
+            margin-top: -7px;
+            box-shadow: 0 0 10px rgba(255, 215, 0, 0.4);
+        }
+
+        /* Custom Scrollbar for Tactical look */
+        ::-webkit-scrollbar {
+            width: 4px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #121416;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #4d4732;
+            border-radius: 10px;
+        }
+
+        .bg-gradient-tactical {
+            background: linear-gradient(180deg, #1e2022 0%, #161a1d 100%);
+        }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-background text-on-background font-body-md selection:bg-primary-container selection:text-on-primary-container overflow-x-hidden">
+<!-- TopAppBar -->
+<header class="fixed top-0 left-0 w-full z-50 flex items-center justify-between px-margin-mobile h-16 bg-background dark:bg-background border-b border-outline-variant/30">
+<div class="flex items-center gap-3">
+<button class="text-primary dark:text-primary active:scale-95 transition-transform material-symbols-outlined" data-icon="menu">menu</button>
+<h1 class="font-headline-md text-headline-md font-bold text-primary-container dark:text-primary-container tracking-tighter">TACTICAL_SENS</h1>
+</div>
+<div class="flex items-center gap-4">
+<button class="text-primary dark:text-primary active:scale-95 transition-transform material-symbols-outlined" data-icon="settings">settings</button>
+</div>
+</header>
+<!-- Navigation Drawer (Tab Switcher Overlay) -->
+<nav class="fixed inset-y-0 left-0 z-[60] h-full w-72 rounded-r-xl bg-surface-container dark:bg-surface-container border-r border-outline-variant/30 shadow-2xl -translate-x-full transition-transform duration-300" id="drawer">
+<div class="p-6">
+<div class="font-headline-lg-mobile text-headline-lg-mobile text-primary-container mb-8">SENSITIVITY_CONFIG</div>
+<div class="flex flex-col gap-2">
+<a class="flex items-center gap-4 p-4 font-label-caps text-label-caps bg-secondary-container text-on-secondary-container rounded-lg mx-2 transition-colors duration-200" href="#">
+<span class="material-symbols-outlined" data-icon="photo_camera">photo_camera</span> Camera
+                </a>
+<a class="flex items-center gap-4 p-4 font-label-caps text-label-caps text-on-surface-variant hover:text-on-surface hover:bg-surface-variant mx-2 transition-colors duration-200" href="#">
+<span class="material-symbols-outlined" data-icon="gps_fixed">gps_fixed</span> ADS
+                </a>
+<a class="flex items-center gap-4 p-4 font-label-caps text-label-caps text-on-surface-variant hover:text-on-surface hover:bg-surface-variant mx-2 transition-colors duration-200" href="#">
+<span class="material-symbols-outlined" data-icon="screen_rotation">screen_rotation</span> Gyroscope
+                </a>
+<a class="flex items-center gap-4 p-4 font-label-caps text-label-caps text-on-surface-variant hover:text-on-surface hover:bg-surface-variant mx-2 transition-colors duration-200" href="#">
+<span class="material-symbols-outlined" data-icon="track_changes">track_changes</span> ADS-Gyro
+                </a>
+</div>
+</div>
+</nav>
+<!-- Main Content Canvas -->
+<main class="pt-16 pb-24 px-4 max-w-md mx-auto">
+<!-- Tab Bar (Horizontal Scrollable on Mobile) -->
+<div class="flex overflow-x-auto no-scrollbar gap-1 py-4 mb-2 sticky top-16 bg-background z-40">
+<button class="whitespace-nowrap px-6 py-2 font-label-caps text-label-caps text-primary-container font-bold border-b-2 border-primary-container active:scale-95 transition-transform">CAMERA</button>
+<button class="whitespace-nowrap px-6 py-2 font-label-caps text-label-caps text-on-surface-variant hover:bg-surface-variant/20 active:scale-95 transition-transform">ADS</button>
+<button class="whitespace-nowrap px-6 py-2 font-label-caps text-label-caps text-on-surface-variant hover:bg-surface-variant/20 active:scale-95 transition-transform">GYRO</button>
+<button class="whitespace-nowrap px-6 py-2 font-label-caps text-label-caps text-on-surface-variant hover:bg-surface-variant/20 active:scale-95 transition-transform">ADS-GYRO</button>
+</div>
+<!-- Tactical Tip Card -->
+<section class="mb-8">
+<div class="bg-gradient-tactical border border-outline-variant/30 rounded-xl p-4 flex gap-4">
+<div class="bg-primary-container/10 p-2 rounded-lg h-fit">
+<span class="material-symbols-outlined text-primary-container" style="font-variation-settings: 'FILL' 1;">info</span>
+</div>
+<div>
+<h3 class="font-label-caps text-label-caps text-primary-container mb-1">TACTICAL TIP</h3>
+<p class="font-body-md text-on-surface-variant text-sm leading-relaxed">
+                        ADS sensitivity specifically affects camera rotation while firing. Higher ADS values help counteract vertical recoil on rapid-fire weapons like the M416 or AKM.
+                    </p>
+</div>
+</div>
+</section>
+<!-- Sensitivity Settings List -->
+<section class="space-y-6">
+<!-- Item 1 -->
+<div class="space-y-3">
+<div class="flex justify-between items-end">
+<label class="font-label-caps text-label-caps text-on-surface uppercase tracking-widest">3rd Person No Scope</label>
+<span class="font-stats-num text-stats-num text-primary-container">120%</span>
+</div>
+<input class="tactical-range" max="400" min="1" type="range" value="120"/>
+</div>
+<!-- Item 2 -->
+<div class="space-y-3">
+<div class="flex justify-between items-end">
+<label class="font-label-caps text-label-caps text-on-surface uppercase tracking-widest">1st Person No Scope</label>
+<span class="font-stats-num text-stats-num text-primary-container">105%</span>
+</div>
+<input class="tactical-range" max="400" min="1" type="range" value="105"/>
+</div>
+<!-- Item 3 -->
+<div class="space-y-3">
+<div class="flex justify-between items-end">
+<label class="font-label-caps text-label-caps text-on-surface uppercase tracking-widest">Red Dot, Holo, Aim Assist</label>
+<span class="font-stats-num text-stats-num text-primary-container">55%</span>
+</div>
+<input class="tactical-range" max="400" min="1" type="range" value="55"/>
+</div>
+<!-- Item 4 -->
+<div class="space-y-3">
+<div class="flex justify-between items-end">
+<label class="font-label-caps text-label-caps text-on-surface uppercase tracking-widest">2x Scope</label>
+<span class="font-stats-num text-stats-num text-primary-container">36%</span>
+</div>
+<input class="tactical-range" max="400" min="1" type="range" value="36"/>
+</div>
+<!-- Item 5 -->
+<div class="space-y-3">
+<div class="flex justify-between items-end">
+<label class="font-label-caps text-label-caps text-on-surface uppercase tracking-widest">3x Scope, Win94</label>
+<span class="font-stats-num text-stats-num text-primary-container">27%</span>
+</div>
+<input class="tactical-range" max="400" min="1" type="range" value="27"/>
+</div>
+<!-- Item 6 -->
+<div class="space-y-3">
+<div class="flex justify-between items-end">
+<label class="font-label-caps text-label-caps text-on-surface uppercase tracking-widest">4x Scope, VSS</label>
+<span class="font-stats-num text-stats-num text-primary-container">17%</span>
+</div>
+<input class="tactical-range" max="400" min="1" type="range" value="17"/>
+</div>
+<!-- Item 7 -->
+<div class="space-y-3">
+<div class="flex justify-between items-end">
+<label class="font-label-caps text-label-caps text-on-surface uppercase tracking-widest">6x Scope</label>
+<span class="font-stats-num text-stats-num text-primary-container">14%</span>
+</div>
+<input class="tactical-range" max="400" min="1" type="range" value="14"/>
+</div>
+<!-- Item 8 -->
+<div class="space-y-3">
+<div class="flex justify-between items-end">
+<label class="font-label-caps text-label-caps text-on-surface uppercase tracking-widest">8x Scope</label>
+<span class="font-stats-num text-stats-num text-primary-container">10%</span>
+</div>
+<input class="tactical-range" max="400" min="1" type="range" value="10"/>
+</div>
+</section>
+<!-- Aesthetic Divider -->
+<div class="py-10 flex items-center gap-4">
+<div class="h-px flex-1 bg-outline-variant/30"></div>
+<span class="font-label-caps text-[10px] text-outline opacity-50 tracking-[0.3em]">END OF CONFIGURATION</span>
+<div class="h-px flex-1 bg-outline-variant/30"></div>
+</div>
+</main>
+<!-- Floating Action Button -->
+<div class="fixed bottom-24 left-1/2 -translate-x-1/2 w-[calc(100%-32px)] max-w-md px-4 z-50">
+<button class="w-full bg-primary-container text-on-primary-container py-4 rounded-xl font-label-caps text-label-caps flex items-center justify-center gap-3 shadow-[0_8px_32px_rgba(255,215,0,0.3)] active:scale-95 transition-all">
+<span class="material-symbols-outlined">content_copy</span>
+            COPY ALL CONFIG
+        </button>
+</div>
+<!-- BottomNavBar -->
+<footer class="fixed bottom-0 left-0 w-full z-50 flex justify-around items-center px-4 py-2 pb-safe bg-surface-container-high dark:bg-surface-container-high rounded-t-xl border-t border-primary-container/20 shadow-[0_-4px_12px_rgba(0,0,0,0.5)]">
+<button class="flex flex-col items-center justify-center bg-primary-container text-on-primary-container rounded-full w-12 h-12 mb-1 active:scale-90 transition-all duration-150">
+<span class="material-symbols-outlined" data-icon="dashboard_customize">dashboard_customize</span>
+</button>
+<button class="flex flex-col items-center justify-center text-on-surface-variant hover:text-primary active:scale-90 transition-all duration-150">
+<span class="material-symbols-outlined" data-icon="bolt">bolt</span>
+</button>
+<button class="flex flex-col items-center justify-center text-on-surface-variant hover:text-primary active:scale-90 transition-all duration-150">
+<span class="material-symbols-outlined" data-icon="content_copy">content_copy</span>
+</button>
+<button class="flex flex-col items-center justify-center text-on-surface-variant hover:text-primary active:scale-90 transition-all duration-150">
+<span class="material-symbols-outlined" data-icon="share">share</span>
+</button>
+</footer>
+<script>
+        // Simple micro-interaction for sliders
+        const sliders = document.querySelectorAll('input[type="range"]');
+        sliders.forEach(slider => {
+            slider.addEventListener('input', (e) => {
+                const valueDisplay = e.target.parentElement.querySelector('.text-primary-container');
+                if (valueDisplay) {
+                    valueDisplay.textContent = `${e.target.value}%`;
+                }
+            });
+        });
+
+        // Toggle Drawer logic
+        const menuBtn = document.querySelector('[data-icon="menu"]');
+        const drawer = document.getElementById('drawer');
+        let isOpen = false;
+
+        menuBtn.addEventListener('click', () => {
+            isOpen = !isOpen;
+            if (isOpen) {
+                drawer.classList.remove('-translate-x-full');
+            } else {
+                drawer.classList.add('-translate-x-full');
+            }
+        });
+
+        // Close drawer on click outside
+        document.addEventListener('click', (e) => {
+            if (isOpen && !drawer.contains(e.target) && e.target !== menuBtn) {
+                isOpen = false;
+                drawer.classList.add('-translate-x-full');
+            }
+        });
+    </script>
+</body></html>

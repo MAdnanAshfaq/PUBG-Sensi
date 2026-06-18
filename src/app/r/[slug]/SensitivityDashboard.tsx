@@ -7,9 +7,7 @@ import {
   Share2, 
   Lightbulb, 
   RotateCcw, 
-  Target, 
-  Minus, 
-  Plus 
+  Target 
 } from 'lucide-react';
 import { SavedResult } from '@/utils/db';
 
@@ -46,7 +44,7 @@ export default function SensitivityDashboard({ result }: SensitivityDashboardPro
       if (!catValues) return null;
       return {
         no_scope_3rd: catValues.no_scope,
-        no_scope_1st: catValues.no_scope, // FPP starts equal to 3rd person
+        no_scope_1st: catValues.no_scope,
         red_dot: catValues.red_dot,
         scope_2x: catValues.scope_2x,
         scope_3x: catValues.scope_3x,
@@ -77,17 +75,42 @@ export default function SensitivityDashboard({ result }: SensitivityDashboardPro
     });
   };
 
-  // Reset slider to server default
-  const handleResetSlider = (category: TabType, scopeKey: string) => {
-    let defaultVal;
-    if (scopeKey === 'no_scope_3rd' || scopeKey === 'no_scope_1st') {
-      defaultVal = (result.values as any)[category]?.no_scope;
-    } else {
-      defaultVal = (result.values as any)[category]?.[scopeKey];
-    }
-    if (defaultVal !== undefined) {
-      handleSliderChange(category, scopeKey, defaultVal);
-    }
+  // Reset entire category/card to server calculated default
+  const handleResetCategory = (category: TabType) => {
+    setSensValues((prev) => {
+      const updated = { ...prev };
+      const defaultCat = (result.values as any)[category];
+      if (defaultCat) {
+        updated[category] = {
+          no_scope_3rd: defaultCat.no_scope,
+          no_scope_1st: defaultCat.no_scope,
+          red_dot: defaultCat.red_dot,
+          scope_2x: defaultCat.scope_2x,
+          scope_3x: defaultCat.scope_3x,
+          scope_4x: defaultCat.scope_4x,
+          scope_6x: defaultCat.scope_6x,
+          scope_8x: defaultCat.scope_8x,
+        };
+      }
+      return updated;
+    });
+  };
+
+  // Check if a category has been modified from default
+  const isCategoryModified = (category: TabType) => {
+    const current = sensValues[category];
+    const defaultCat = (result.values as any)[category];
+    if (!current || !defaultCat) return false;
+    return (
+      current.no_scope_3rd !== defaultCat.no_scope ||
+      current.no_scope_1st !== defaultCat.no_scope ||
+      current.red_dot !== defaultCat.red_dot ||
+      current.scope_2x !== defaultCat.scope_2x ||
+      current.scope_3x !== defaultCat.scope_3x ||
+      current.scope_4x !== defaultCat.scope_4x ||
+      current.scope_6x !== defaultCat.scope_6x ||
+      current.scope_8x !== defaultCat.scope_8x
+    );
   };
 
   // Copy share link
@@ -146,7 +169,7 @@ export default function SensitivityDashboard({ result }: SensitivityDashboardPro
     }
   };
 
-  // Render a PUBG-style sensitivity card containing two columns of sliders
+  // Render a PUBG-style sensitivity card containing two columns of sliders (Exact Replica)
   const renderSensCard = (
     category: TabType,
     title: string,
@@ -156,53 +179,36 @@ export default function SensitivityDashboard({ result }: SensitivityDashboardPro
     const values = sensValues[category];
     if (!values) return null;
 
+    const modified = isCategoryModified(category);
+
     const renderSlider = (scopeKey: string, label: string) => {
       const currentVal = (values as any)[scopeKey];
-      
-      let defaultVal;
-      if (scopeKey === 'no_scope_3rd' || scopeKey === 'no_scope_1st') {
-        defaultVal = (result.values as any)[category]?.no_scope;
-      } else {
-        defaultVal = (result.values as any)[category]?.[scopeKey];
-      }
-      
-      const isModified = currentVal !== defaultVal;
       const pct = ((currentVal - 1) / (maxVal - 1)) * 100;
 
       return (
-        <div key={scopeKey} className="space-y-1.5">
-          <div className="flex justify-between items-center h-5">
-            <span className="text-[11px] font-semibold text-[#8eb0c9] tracking-wide uppercase">
+        <div key={scopeKey} className="space-y-1">
+          {/* Label Row (Plain text, no boxes) */}
+          <div className="flex justify-between items-center h-4">
+            <span className="text-[11px] font-semibold text-[#cbdbe6] font-body select-none">
               {label}
             </span>
-            <div className="flex items-center gap-2">
-              {isModified && (
-                <button
-                  onClick={() => handleResetSlider(category, scopeKey)}
-                  className="text-[9px] font-technical text-primary-yellow hover:underline flex items-center gap-0.5 cursor-pointer"
-                  title="Reset to optimal calculated value"
-                >
-                  <RotateCcw className="w-2.5 h-2.5" />
-                  RESET
-                </button>
-              )}
-              <span className="text-[11px] font-bold font-technical text-[#ffd500] border border-[#233f54] bg-[#090f15] px-2 py-0.5 rounded min-w-[44px] text-center select-none">
-                {currentVal}%
-              </span>
-            </div>
+            <span className="text-[11px] font-bold text-[#cbdbe6] font-body select-none">
+              {currentVal}%
+            </span>
           </div>
 
-          <div className="flex items-center gap-2">
+          {/* Controls Row (Squared buttons, solid color scheme) */}
+          <div className="flex items-center">
             {/* Minus Button */}
             <button
               onClick={() => handleSliderChange(category, scopeKey, Math.max(1, currentVal - 1))}
-              className="w-7 h-7 bg-[#101b26] border border-[#223b4f] hover:border-[#00d2ff] hover:text-[#00d2ff] text-[#7ea1bc] flex items-center justify-center font-bold rounded cursor-pointer select-none active:scale-90 transition-all"
+              className="w-8 h-8 bg-[#1f2d3a] border border-[#455869] text-white hover:bg-[#2c3e50] flex items-center justify-center font-normal rounded-none cursor-pointer select-none active:scale-95 transition-all text-lg"
             >
-              <Minus className="w-3.5 h-3.5" />
+              -
             </button>
 
             {/* Slider track container */}
-            <div className="flex-1 px-1 flex items-center relative">
+            <div className="flex-grow px-2 flex items-center relative">
               <input
                 type="range"
                 min="1"
@@ -211,7 +217,7 @@ export default function SensitivityDashboard({ result }: SensitivityDashboardPro
                 onChange={(e) => handleSliderChange(category, scopeKey, Number(e.target.value))}
                 className="pubg-slider"
                 style={{
-                  background: `linear-gradient(to right, #00d2ff 0%, #00d2ff ${pct}%, #0e161f ${pct}%, #0e161f 100%)`
+                  background: `linear-gradient(to right, #7ea4b5 0%, #7ea4b5 ${pct}%, #0d151c ${pct}%, #0d151c 100%)`
                 }}
               />
             </div>
@@ -219,9 +225,9 @@ export default function SensitivityDashboard({ result }: SensitivityDashboardPro
             {/* Plus Button */}
             <button
               onClick={() => handleSliderChange(category, scopeKey, Math.min(maxVal, currentVal + 1))}
-              className="w-7 h-7 bg-[#101b26] border border-[#223b4f] hover:border-[#00d2ff] hover:text-[#00d2ff] text-[#7ea1bc] flex items-center justify-center font-bold rounded cursor-pointer select-none active:scale-90 transition-all"
+              className="w-8 h-8 bg-[#1f2d3a] border border-[#455869] text-white hover:bg-[#2c3e50] flex items-center justify-center font-normal rounded-none cursor-pointer select-none active:scale-95 transition-all text-lg"
             >
-              <Plus className="w-3.5 h-3.5" />
+              +
             </button>
           </div>
         </div>
@@ -229,22 +235,31 @@ export default function SensitivityDashboard({ result }: SensitivityDashboardPro
     };
 
     return (
-      <div className="bg-[#0b1219]/90 border border-[#1b3244] rounded-xl p-5 space-y-4 shadow-xl relative overflow-hidden">
-        {/* Subtle grid pattern inside card */}
-        <div className="absolute inset-0 opacity-[0.02] pointer-events-none bg-[linear-gradient(to_right,#00d2ff_1px,transparent_1px),linear-gradient(to_bottom,#00d2ff_1px,transparent_1px)] bg-[size:24px_24px]" />
-        
-        <div className="border-b border-[#1b3244]/60 pb-2 relative z-10">
-          <h3 className="font-headline text-base font-extrabold text-[#9cd8ff] tracking-wide uppercase">
-            {title}
-          </h3>
-          <p className="text-[10px] text-[#69859b] mt-0.5">
-            {desc}
-          </p>
+      <div className="bg-[#1b2836]/75 border border-[#384b5c]/40 rounded-sm p-6 space-y-4 shadow-2xl relative">
+        <div className="flex justify-between items-start">
+          <div>
+            <h3 className="text-sm font-bold text-white font-body select-none">
+              {title}
+            </h3>
+            <p className="text-[11px] text-[#a0b0c0] mt-0.5 select-none leading-relaxed">
+              {desc}
+            </p>
+          </div>
+          {modified && (
+            <button
+              onClick={() => handleResetCategory(category)}
+              className="text-[9px] font-technical text-primary-yellow hover:underline flex items-center gap-1 cursor-pointer"
+              title="Reset entire card to optimal default values"
+            >
+              <RotateCcw className="w-2.5 h-2.5" />
+              RESET CARD
+            </button>
+          )}
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-4 relative z-10">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-12 gap-y-5">
           {/* Left Column */}
-          <div className="space-y-4">
+          <div className="space-y-3">
             {renderSlider('no_scope_3rd', '3rd Person No Scope')}
             {renderSlider('red_dot', 'Red Dot, Holographic, Aim Assist')}
             {renderSlider('scope_3x', '3x Scope, Win94')}
@@ -252,7 +267,7 @@ export default function SensitivityDashboard({ result }: SensitivityDashboardPro
           </div>
 
           {/* Right Column */}
-          <div className="space-y-4">
+          <div className="space-y-3">
             {renderSlider('no_scope_1st', '1st Person No Scope')}
             {renderSlider('scope_2x', '2x Scope')}
             {renderSlider('scope_4x', '4x Scope, VSS')}
@@ -285,8 +300,8 @@ export default function SensitivityDashboard({ result }: SensitivityDashboardPro
       </div>
 
       {/* Dynamic Tactical Analysis Panel with Sub-Tabs */}
-      <div className="bg-[#0b1219]/90 border border-[#1b3244] rounded-xl p-5 space-y-4 shadow-xl relative overflow-hidden animate-scan">
-        <div className="flex border-b border-[#1b3244]/40 pb-2 overflow-x-auto no-scrollbar gap-2">
+      <div className="bg-[#1b2836]/75 border border-[#384b5c]/40 rounded-sm p-5 space-y-4 shadow-2xl relative">
+        <div className="flex border-b border-[#384b5c]/30 pb-2 overflow-x-auto no-scrollbar gap-2">
           <div className="bg-primary-yellow/15 p-1 rounded-lg h-fit text-primary-yellow flex-shrink-0 mr-1 animate-pulse">
             <Lightbulb className="w-4 h-4" />
           </div>
@@ -303,7 +318,7 @@ export default function SensitivityDashboard({ result }: SensitivityDashboardPro
                   className={`text-[10px] font-headline font-bold tracking-widest px-2.5 py-1 transition-all rounded cursor-pointer ${
                     activeAnalysisTab === tab.id
                       ? 'bg-primary-yellow/20 text-primary-yellow border border-primary-yellow/30'
-                      : 'text-text-muted hover:text-foreground border border-transparent'
+                      : 'text-[#a0b0c0] hover:text-foreground border border-transparent'
                   }`}
                 >
                   {tab.label}
@@ -312,46 +327,46 @@ export default function SensitivityDashboard({ result }: SensitivityDashboardPro
           )}
         </div>
         <div className="space-y-1">
-          <p className="text-xs text-text-muted leading-relaxed select-none">
+          <p className="text-xs text-[#a0b0c0] leading-relaxed select-none">
             {getActiveExplanation()}
           </p>
         </div>
       </div>
 
-      {/* PUBG Mobile Themed Sensitivity Cards Stack */}
+      {/* PUBG Mobile Themed Sensitivity Cards Stack (Exact Replica) */}
       <div className="space-y-5">
         {renderSensCard(
           'camera', 
           'Camera', 
-          'Affects the sensitivity of the camera when the screen is swiped without firing.', 
+          '(Affects the sensitivity of the camera when the screen is swiped without firing.)', 
           200
         )}
         
         {renderSensCard(
           'ads', 
           'ADS Sensitivity', 
-          'Affects the sensitivity of the camera when the screen is swiped while firing. Can be used to keep the barrel down.', 
+          '(Affects the sensitivity of the camera when the screen is swiped while firing. Can be used to keep the barrel down.)', 
           200
         )}
 
         {hasGyro && renderSensCard(
           'gyro', 
           'Gyroscope', 
-          'When the Gyroscope is activated, the sensitivity of the tilt camera controls can be adjusted.', 
+          '(When the Gyroscope is activated, the sensitivity of the tilt camera controls can be adjusted.)', 
           400
         )}
 
         {hasGyro && renderSensCard(
           'adsGyro', 
           'ADS Gyroscope', 
-          'When the Gyroscope is activated, the sensitivity of the tilt camera controls during shooting can be adjusted.', 
+          '(When the Gyroscope is activated, the sensitivity of the tilt camera controls during shooting can be adjusted.)', 
           400
         )}
       </div>
 
       {/* Shooting Range Simulator (Coming Soon Placeholder) */}
-      <div className="bg-[#0b1219]/90 border border-[#1b3244] rounded-xl p-5 space-y-4 relative overflow-hidden">
-        <div className="flex justify-between items-center border-b border-[#1b3244]/60 pb-2">
+      <div className="bg-[#1b2836]/75 border border-[#384b5c]/40 rounded-sm p-5 space-y-4 relative overflow-hidden">
+        <div className="flex justify-between items-center border-b border-[#384b5c]/30 pb-2">
           <h3 className="font-headline text-base font-extrabold text-[#9cd8ff] tracking-wide uppercase flex items-center gap-2">
             <Target className="w-5 h-5 text-primary-yellow animate-pulse" />
             SHOOTING RANGE SIMULATOR
@@ -361,7 +376,7 @@ export default function SensitivityDashboard({ result }: SensitivityDashboardPro
           </span>
         </div>
 
-        <div className="relative border border-[#1b3244]/30 rounded-xl bg-background/20 p-8 text-center flex flex-col items-center justify-center min-h-[200px] overflow-hidden">
+        <div className="relative border border-[#384b5c]/20 rounded-xl bg-background/20 p-8 text-center flex flex-col items-center justify-center min-h-[200px] overflow-hidden">
           <div className="absolute inset-0 opacity-[0.03] pointer-events-none bg-[linear-gradient(to_right,#ffd700_1px,transparent_1px),linear-gradient(to_bottom,#ffd700_1px,transparent_1px)] bg-[size:15px_15px]" />
           
           <div className="relative z-10 space-y-3 max-w-sm">
@@ -369,7 +384,7 @@ export default function SensitivityDashboard({ result }: SensitivityDashboardPro
               <Target className="w-6 h-6" />
             </div>
             <h4 className="font-headline text-sm font-extrabold text-foreground tracking-wider uppercase">PHYSICS ENGINE CALIBRATION</h4>
-            <p className="text-xs text-[#69859b] leading-relaxed">
+            <p className="text-xs text-[#a0b0c0] leading-relaxed">
               Our interactive 3D weapon recoil simulator is currently undergoing server-side physics engine calibration. Check back soon to test your sensitivity configurations.
             </p>
           </div>

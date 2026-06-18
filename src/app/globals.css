@@ -191,56 +191,53 @@ input[type="range"]::-moz-range-thumb {
   scrollbar-width: none;
 }
 
-/* PUBG Custom Slider Styling */
-.pubg-slider {
+/* PUBG Custom Slider Styling (Exact Replica) */
+input[type="range"].pubg-slider {
   -webkit-appearance: none;
   appearance: none;
   width: 100%;
-  height: 6px;
-  border-radius: 3px;
+  height: 8px;
+  border-radius: 0px;
   outline: none;
   cursor: pointer;
-  border: 1px solid rgba(0, 210, 255, 0.15);
+  background: #0d151c;
 }
 
-.pubg-slider::-webkit-slider-runnable-track {
+input[type="range"].pubg-slider::-webkit-slider-runnable-track {
   background: transparent;
-  height: 6px;
+  height: 8px;
   border: none;
 }
 
-.pubg-slider::-webkit-slider-thumb {
+input[type="range"].pubg-slider::-webkit-slider-thumb {
   -webkit-appearance: none;
   appearance: none;
-  height: 16px;
-  width: 16px;
+  height: 18px;
+  width: 18px;
   border-radius: 50%;
-  background: #ffffff;
-  border: 3px solid #00d2ff;
-  box-shadow: 0 0 8px rgba(0, 210, 255, 0.7);
+  background: #d7e5ed;
   cursor: pointer;
-  margin-top: -5px; /* center it vertically */
-  transition: transform 0.1s ease, border-color 0.1s ease;
+  margin-top: -5px; /* (8px track - 18px thumb)/2 = -5px */
+  border: none;
+  box-shadow: none;
+  transition: background-color 0.1s ease;
 }
 
-.pubg-slider::-webkit-slider-thumb:hover {
-  transform: scale(1.2);
-  border-color: #ffffff;
-  background: #00d2ff;
+input[type="range"].pubg-slider::-webkit-slider-thumb:hover {
+  background: #ffffff;
 }
 
-.pubg-slider::-moz-range-track {
+input[type="range"].pubg-slider::-moz-range-track {
   background: transparent;
-  height: 6px;
+  height: 8px;
   border: none;
 }
 
-.pubg-slider::-moz-range-thumb {
-  height: 14px;
-  width: 14px;
+input[type="range"].pubg-slider::-moz-range-thumb {
+  height: 18px;
+  width: 18px;
   border-radius: 50%;
-  background: #ffffff;
-  border: 3px solid #00d2ff;
-  box-shadow: 0 0 8px rgba(0, 210, 255, 0.7);
+  background: #d7e5ed;
   cursor: pointer;
+  border: none;
 }

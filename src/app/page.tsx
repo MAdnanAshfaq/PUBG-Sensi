@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { 
   Shield, 
@@ -8,9 +8,7 @@ import {
   Laptop, 
   Smartphone, 
   Zap, 
-  RotateCw, 
   Crosshair, 
-  Touchpad, 
   Info, 
   Flame, 
   Target, 
@@ -22,8 +20,14 @@ import {
   ArrowLeft, 
   ArrowRight, 
   Wrench, 
-  Loader2 
+  Loader2,
+  Search,
+  Cpu,
+  Gauge,
+  RotateCw
 } from 'lucide-react';
+
+const STORAGE_KEY = 'aimsync_wizard_state';
 
 interface WizardData {
   deviceTier: 'budget' | 'mid' | 'flagship';
@@ -42,7 +46,8 @@ export default function OnboardingWizard() {
   const [step, setStep] = useState(1);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [loadingStatus, setLoadingStatus] = useState('CALCULATING BALANCES');
-  
+  const [hydrated, setHydrated] = useState(false);
+
   const [formData, setFormData] = useState<WizardData>({
     deviceTier: 'mid',
     fps: 60,
@@ -52,6 +57,41 @@ export default function OnboardingWizard() {
     primaryProblem: 'recoil',
   });
 
+  // ── Device lookup state (Step 7) ────────────────────────────────────────
+  const [deviceInput, setDeviceInput] = useState('');
+  const [lookupStatus, setLookupStatus] = useState<'idle' | 'loading' | 'done' | 'error'>('idle');
+  const [lookupResult, setLookupResult] = useState<null | {
+    deviceModel: string; chipset: string; displayHz: number;
+    touchSamplingHz: number; gyroSensor: string;
+    deviceTier: 'budget' | 'mid' | 'flagship';
+    measuredLatencyMs: number; measuredSwipeSpeed: number;
+    gyroStabilityScore: number; summary: string;
+  }>(null);
+  const [lookupError, setLookupError] = useState('');
+
+  // ── localStorage persistence (refresh-safe) ──────────────────────────────
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY);
+      if (saved) {
+        const { step: savedStep, formData: savedForm, deviceInput: savedDevice, lookupResult: savedLookup } = JSON.parse(saved);
+        if (savedStep) setStep(savedStep);
+        if (savedForm)  setFormData(savedForm);
+        if (savedDevice) setDeviceInput(savedDevice);
+        if (savedLookup) setLookupResult(savedLookup);
+        if (savedLookup) setLookupStatus('done');
+      }
+    } catch { /* ignore parse errors */ }
+    setHydrated(true);
+  }, []);
+
+  useEffect(() => {
+    if (!hydrated) return;
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({ step, formData, deviceInput, lookupResult }));
+    } catch { /* ignore storage errors */ }
+  }, [step, formData, deviceInput, lookupResult, hydrated]);
+
   const nextStep = () => setStep((s) => Math.min(s + 1, 7));
   const prevStep = () => setStep((s) => Math.max(s - 1, 1));
 
@@ -59,153 +99,40 @@ export default function OnboardingWizard() {
     setFormData((prev) => ({ ...prev, [key]: value }));
   };
 
-  // Calibration Sub-step: 'touch' | 'swipe' | 'gyro'
-  const [calibSubStep, setCalibSubStep] = useState<'touch' | 'swipe' | 'gyro'>('touch');
-  
-  // Touch latency test states
-  const [touchStatus, setTouchStatus] = useState<'idle' | 'waiting' | 'ready' | 'success' | 'done'>('idle');
-  const [touchTaps, setTouchTaps] = useState<number[]>([]);
-  const touchFlashTimer = useRef<NodeJS.Timeout | null>(null);
-  const touchFlashTime = useRef<number>(0);
-
-  // Swipe speed test states
-  const [swipeStatus, setSwipeStatus] = useState<'idle' | 'active' | 'done'>('idle');
-  const [swipeProgress, setSwipeProgress] = useState(0);
-  const swipeStartTime = useRef<number>(0);
-  const swipeStartX = useRef<number>(0);
-
-  // Gyro sensor states
-  const [gyroStatus, setGyroStatus] = useState<'idle' | 'listening' | 'done' | 'unsupported'>('idle');
-  const [gyroAngle, setGyroAngle] = useState({ alpha: 0, beta: 0, gamma: 0 });
-  const [gyroJitters, setGyroJitters] = useState<number[]>([]);
-
-  // 1. Touch Test logic
-  const startTouchTest = () => {
-    setTouchStatus('waiting');
-    setTouchTaps([]);
-    triggerTouchFlash();
-  };
-
-  const triggerTouchFlash = () => {
-    const delay = Math.random() * 1500 + 1000;
-    touchFlashTimer.current = setTimeout(() => {
-      touchFlashTime.current = performance.now();
-      setTouchStatus('ready');
-    }, delay);
-  };
-
-  const handleTouchTap = () => {
-    if (touchStatus !== 'ready') return;
-    const now = performance.now();
-    const delay = Math.round(now - touchFlashTime.current);
-    const updatedTaps = [...touchTaps, delay];
-    setTouchTaps(updatedTaps);
-
-    if (updatedTaps.length < 3) {
-      setTouchStatus('success');
-      setTimeout(() => {
-        setTouchStatus('waiting');
-        triggerTouchFlash();
-      }, 800);
-    } else {
-      setTouchStatus('done');
-      const avg = Math.round(updatedTaps.reduce((a, b) => a + b, 0) / 3);
-      selectOption('measuredLatencyMs', avg);
-    }
-  };
-
-  // 2. Swipe velocity logic
-  const handleSwipeStart = (e: React.PointerEvent<HTMLDivElement>) => {
-    if (swipeStatus === 'done') return;
-    swipeStartX.current = e.clientX;
-    swipeStartTime.current = performance.now();
-    setSwipeStatus('active');
-    setSwipeProgress(0);
-    e.currentTarget.setPointerCapture(e.pointerId);
-  };
-
-  const handleSwipeMove = (e: React.PointerEvent<HTMLDivElement>) => {
-    if (swipeStatus !== 'active') return;
-    const containerWidth = e.currentTarget.clientWidth;
-    const deltaX = e.clientX - swipeStartX.current;
-    const pct = Math.max(0, Math.min(100, Math.round((deltaX / containerWidth) * 100)));
-    setSwipeProgress(pct);
-
-    if (pct >= 100) {
-      const now = performance.now();
-      const elapsed = now - swipeStartTime.current;
-      const pixels = containerWidth;
-      const speed = pixels / elapsed;
-      const multiplier = Math.max(0.8, Math.min(1.25, Number((1.2 / speed).toFixed(2))));
-      
-      setSwipeStatus('done');
-      selectOption('measuredSwipeSpeed', multiplier);
-      e.currentTarget.releasePointerCapture(e.pointerId);
-    }
-  };
-
-  const handleSwipeEnd = (e: React.PointerEvent<HTMLDivElement>) => {
-    if (swipeStatus === 'active') {
-      setSwipeStatus('idle');
-      setSwipeProgress(0);
-      e.currentTarget.releasePointerCapture(e.pointerId);
-    }
-  };
-
-  // 3. Gyroscope logic
-  const handleOrientation = (e: DeviceOrientationEvent) => {
-    const alpha = e.alpha || 0;
-    const beta = e.beta || 0;
-    const gamma = e.gamma || 0;
-    setGyroAngle({ alpha, beta, gamma });
-    setGyroJitters(prev => [...prev, Math.abs(beta) + Math.abs(gamma)].slice(-30));
-  };
-
-  const startGyroTest = async () => {
-    setGyroStatus('listening');
-    setGyroJitters([]);
-    
-    if (typeof window !== 'undefined' && 'DeviceOrientationEvent' in window) {
-      const reqPermission = (DeviceOrientationEvent as any).requestPermission;
-      if (typeof reqPermission === 'function') {
-        try {
-          const res = await reqPermission();
-          if (res === 'granted') {
-            window.addEventListener('deviceorientation', handleOrientation);
-          } else {
-            setGyroStatus('unsupported');
-          }
-        } catch (err) {
-          console.error(err);
-          setGyroStatus('unsupported');
-        }
+  // ── Gemini device lookup ─────────────────────────────────────────────────
+  const handleDeviceLookup = async () => {
+    if (!deviceInput.trim() || lookupStatus === 'loading') return;
+    setLookupStatus('loading');
+    setLookupError('');
+    setLookupResult(null);
+    try {
+      const res = await fetch('/api/device-lookup', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ deviceModel: deviceInput.trim() }),
+      });
+      const data = await res.json();
+      if (data.success && data.device) {
+        const d = data.device;
+        setLookupResult(d);
+        setLookupStatus('done');
+        // Auto-apply calibration values + device tier
+        setFormData(prev => ({
+          ...prev,
+          deviceTier: d.deviceTier,
+          measuredLatencyMs: d.measuredLatencyMs,
+          measuredSwipeSpeed: d.measuredSwipeSpeed,
+          gyroStabilityScore: d.gyroStabilityScore,
+        }));
       } else {
-        window.addEventListener('deviceorientation', handleOrientation);
+        setLookupError(data.error || 'Could not identify device.');
+        setLookupStatus('error');
       }
-    } else {
-      setGyroStatus('unsupported');
+    } catch {
+      setLookupError('Network error. Please check connection.');
+      setLookupStatus('error');
     }
-
-    setTimeout(() => {
-      window.removeEventListener('deviceorientation', handleOrientation);
-      setGyroStatus('done');
-      selectOption('gyroStabilityScore', 0.96);
-    }, 3000);
   };
-
-  const skipGyroTest = () => {
-    setGyroStatus('done');
-    setGyroAngle({ alpha: 15, beta: 45, gamma: -10 });
-    selectOption('gyroStabilityScore', 0.95);
-  };
-
-  // Cleanup timers & events
-  useEffect(() => {
-    return () => {
-      if (touchFlashTimer.current) clearTimeout(touchFlashTimer.current);
-      window.removeEventListener('deviceorientation', handleOrientation);
-    };
-  }, []);
 
   const handleSubmit = async () => {
     setIsSubmitting(true);
@@ -239,6 +166,8 @@ export default function OnboardingWizard() {
       const data = await response.json();
       clearInterval(interval);
       if (data.success && data.slug) {
+        // Clear saved wizard state on success so a fresh session starts next time
+        try { localStorage.removeItem(STORAGE_KEY); } catch { /* ignore */ }
         router.push(`/r/${data.slug}`);
       } else {
         alert('Failed to generate sensitivity profile. Please try again.');
@@ -361,7 +290,7 @@ export default function OnboardingWizard() {
               {[
                 { id: 'always_on', label: 'Always-on Gyroscope', desc: 'Highly Recommended. Gyroscope controls both camera look and weapon recoil tilting.', icon: RotateCw },
                 { id: 'scope_on', label: 'Scope-only Gyroscope', desc: 'Gyroscope is only active when aiming down sights (ADS). Good for sniper players.', icon: Crosshair },
-                { id: 'off', label: 'Disabled (Swipe only)', desc: 'Recoil is controlled entirely by sliding fingers on screen. Recommended to learn Gyro!', icon: Touchpad },
+                { id: 'off', label: 'Disabled (Swipe only)', desc: 'Recoil is controlled entirely by sliding fingers on screen. Recommended to learn Gyro!', icon: Smartphone },
               ].map((opt) => {
                 const IconComponent = opt.icon;
                 return (
@@ -504,265 +433,117 @@ export default function OnboardingWizard() {
         )}
 
         {step === 7 && (
-          <div className="space-y-6">
+          <div className="space-y-5">
             <div className="space-y-1">
               <h2 className="font-headline text-2xl font-bold uppercase tracking-tight text-foreground">7. HARDWARE CALIBRATION</h2>
-              <p className="text-sm text-text-muted">Perform real-time sensor tests to adapt configurations precisely to your physical glass friction and screen latency.</p>
+              <p className="text-sm text-text-muted">Enter your exact phone model. AimSync uses AI to research your device's touch latency, gyro sensor, and screen specs — no manual tests needed.</p>
             </div>
-            
-            {/* Sub-step Selection Header */}
-            <div className="flex border-b border-border-tactical/20">
-              <button
-                type="button"
-                onClick={() => setCalibSubStep('touch')}
-                className={`flex-1 pb-3 text-xs font-technical uppercase tracking-wider border-b-2 text-center transition-all ${
-                  calibSubStep === 'touch'
-                    ? 'border-primary-yellow text-primary-yellow font-bold'
-                    : 'border-transparent text-text-muted hover:text-foreground'
-                }`}
-              >
-                1. Touch Latency
-              </button>
-              <button
-                type="button"
-                onClick={() => setCalibSubStep('swipe')}
-                className={`flex-1 pb-3 text-xs font-technical uppercase tracking-wider border-b-2 text-center transition-all ${
-                  calibSubStep === 'swipe'
-                    ? 'border-primary-yellow text-primary-yellow font-bold'
-                    : 'border-transparent text-text-muted hover:text-foreground'
-                }`}
-              >
-                2. Swipe Friction
-              </button>
-              {formData.gyroMode !== 'off' && (
+
+            {/* Device Input */}
+            <div className="space-y-3">
+              <div className="flex gap-2">
+                <div className="relative flex-1">
+                  <Cpu className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-text-muted" />
+                  <input
+                    type="text"
+                    value={deviceInput}
+                    onChange={(e) => setDeviceInput(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && handleDeviceLookup()}
+                    placeholder="e.g. OnePlus 8 5G, iPhone 13, POCO X5 Pro"
+                    className="w-full pl-10 pr-4 py-3 bg-surface-card border border-border-tactical/40 rounded-xl text-sm text-foreground placeholder:text-text-muted/50 focus:outline-none focus:border-primary-yellow/60 focus:bg-surface-hover transition-all"
+                  />
+                </div>
                 <button
                   type="button"
-                  onClick={() => setCalibSubStep('gyro')}
-                  className={`flex-1 pb-3 text-xs font-technical uppercase tracking-wider border-b-2 text-center transition-all ${
-                    calibSubStep === 'gyro'
-                      ? 'border-primary-yellow text-primary-yellow font-bold'
-                      : 'border-transparent text-text-muted hover:text-foreground'
-                  }`}
+                  onClick={handleDeviceLookup}
+                  disabled={!deviceInput.trim() || lookupStatus === 'loading'}
+                  className="flex items-center gap-2 px-4 py-3 rounded-xl bg-primary-yellow text-background font-headline font-bold text-sm uppercase tracking-wide disabled:opacity-40 disabled:cursor-not-allowed hover:bg-primary-yellow/90 transition-all active:scale-95 shrink-0"
                 >
-                  3. Gyro Sensor
+                  {lookupStatus === 'loading'
+                    ? <Loader2 className="w-4 h-4 animate-spin" />
+                    : <Search className="w-4 h-4" />}
+                  {lookupStatus === 'loading' ? 'SCANNING...' : 'SCAN'}
                 </button>
+              </div>
+
+              {lookupStatus === 'error' && (
+                <p className="text-xs text-red-400 font-technical">{lookupError} — Try a more specific model name.</p>
               )}
             </div>
 
-            {/* Calibration Container */}
-            <div className="bg-surface-card border border-border-tactical/25 rounded-2xl p-6 relative overflow-hidden min-h-[290px] flex flex-col justify-between">
-              
-              {/* SUB-STEP 1: TOUCH TEST */}
-              {calibSubStep === 'touch' && (
-                <div className="flex-grow flex flex-col justify-between space-y-4">
-                  <div className="space-y-1">
-                    <h3 className="font-headline text-sm font-bold text-foreground uppercase tracking-wide">Touch Response Latency Check</h3>
-                    <p className="text-xs text-text-muted leading-relaxed">
-                      Tap the target button immediately when it flashes <span className="text-primary-yellow font-bold">BRIGHT YELLOW</span>. (3 consecutive taps required).
-                    </p>
-                  </div>
-
-                  <div className="flex flex-col items-center justify-center py-2 flex-grow">
-                    {touchStatus === 'idle' && (
-                      <button
-                        type="button"
-                        onClick={startTouchTest}
-                        className="px-6 py-2.5 rounded-lg bg-primary-yellow/10 border border-primary-yellow/30 text-primary-yellow text-xs font-technical tracking-wider uppercase hover:bg-primary-yellow/20"
-                      >
-                        Start Touch Test
-                      </button>
-                    )}
-
-                    {(touchStatus === 'waiting' || touchStatus === 'ready' || touchStatus === 'success') && (
-                      <button
-                        type="button"
-                        onClick={handleTouchTap}
-                        disabled={touchStatus !== 'ready'}
-                        className={`w-32 h-32 rounded-full border-4 flex flex-col items-center justify-center transition-all select-none ${
-                          touchStatus === 'ready'
-                            ? 'bg-primary-yellow border-white text-background animate-pulse shadow-[0_0_25px_rgba(255,215,0,0.5)] scale-105 cursor-pointer'
-                            : 'bg-surface-dark border-border-tactical/30 text-text-muted cursor-not-allowed'
-                        }`}
-                      >
-                        {touchStatus === 'ready' ? (
-                          <span className="font-headline font-black text-xl tracking-wider">TAP NOW!</span>
-                        ) : touchStatus === 'success' ? (
-                          <span className="font-technical font-bold text-sm text-primary-yellow">SUCCESS</span>
-                        ) : (
-                          <span className="font-technical text-xs">WAITING...</span>
-                        )}
-                      </button>
-                    )}
-
-                    {touchStatus === 'done' && (
-                      <div className="text-center space-y-2">
-                        <CheckCircle2 className="w-10 h-10 text-primary-yellow mx-auto animate-bounce" />
-                        <p className="font-technical text-sm font-bold text-foreground">TEST COMPLETE</p>
-                        <p className="text-xs text-text-muted">
-                          Measured Response Delay: <span className="text-primary-yellow font-bold">{formData.measuredLatencyMs}ms</span>
-                        </p>
-                        <button
-                          type="button"
-                          onClick={startTouchTest}
-                          className="text-[10px] font-technical uppercase tracking-wider text-text-muted hover:text-foreground underline block mx-auto pt-2"
-                        >
-                          Re-test Latency
-                        </button>
-                      </div>
-                    )}
-                  </div>
-
-                  <div className="flex items-center gap-1.5 justify-center">
-                    {[1, 2, 3].map((t) => (
-                      <div
-                        key={t}
-                        className={`w-2.5 h-2.5 rounded-full border ${
-                          touchTaps.length >= t
-                            ? 'bg-primary-yellow border-primary-yellow'
-                            : 'bg-transparent border-border-tactical/40'
-                        }`}
-                      />
-                    ))}
+            {/* Loading state */}
+            {lookupStatus === 'loading' && (
+              <div className="bg-surface-card border border-border-tactical/25 rounded-2xl p-6 flex flex-col items-center justify-center gap-4 min-h-[180px]">
+                <div className="relative w-14 h-14">
+                  <div className="absolute inset-0 rounded-full border-2 border-primary-yellow/20 animate-ping" />
+                  <div className="w-14 h-14 rounded-full border-2 border-dashed border-primary-yellow/50 flex items-center justify-center animate-spin [animation-duration:3s]">
+                    <RotateCw className="w-5 h-5 text-primary-yellow" />
                   </div>
                 </div>
-              )}
+                <div className="text-center">
+                  <p className="font-technical text-xs text-primary-yellow uppercase tracking-widest animate-pulse">AI RESEARCHING DEVICE SPECS...</p>
+                  <p className="text-[10px] text-text-muted mt-1">Analyzing chipset, touch sensors, gyroscope hardware</p>
+                </div>
+              </div>
+            )}
 
-              {/* SUB-STEP 2: SWIPE GLIDE TEST */}
-              {calibSubStep === 'swipe' && (
-                <div className="flex-grow flex flex-col justify-between space-y-4">
-                  <div className="space-y-1">
-                    <h3 className="font-headline text-sm font-bold text-foreground uppercase tracking-wide">Screen Glide Friction Calibration</h3>
-                    <p className="text-xs text-text-muted leading-relaxed">
-                      Press down and drag the crosshair circle <span className="text-primary-yellow font-semibold">firmly from Left to Right</span> across the track.
-                    </p>
+            {/* Results card */}
+            {lookupStatus === 'done' && lookupResult && (
+              <div className="bg-surface-card border border-primary-yellow/20 rounded-2xl p-5 space-y-4 shadow-[0_0_20px_rgba(255,215,0,0.07)]">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="font-headline text-base font-extrabold text-foreground uppercase tracking-wide">{lookupResult.deviceModel}</p>
+                    <p className="text-[10px] font-technical text-primary-yellow uppercase tracking-widest mt-0.5">{lookupResult.chipset} · {lookupResult.displayHz}Hz Display</p>
                   </div>
+                  <span className={`text-[9px] font-technical font-bold uppercase tracking-widest px-2.5 py-1 rounded border ${
+                    lookupResult.deviceTier === 'flagship' ? 'bg-primary-yellow/10 border-primary-yellow/40 text-primary-yellow' :
+                    lookupResult.deviceTier === 'mid'      ? 'bg-blue-500/10 border-blue-400/30 text-blue-400' :
+                                                            'bg-white/5 border-white/10 text-text-muted'
+                  }`}>{lookupResult.deviceTier.toUpperCase()}</span>
+                </div>
 
-                  <div className="py-6 space-y-4">
-                    <div 
-                      onPointerDown={handleSwipeStart}
-                      onPointerMove={handleSwipeMove}
-                      onPointerUp={handleSwipeEnd}
-                      className="w-full h-14 bg-surface-dark border border-border-tactical/30 rounded-xl relative flex items-center px-4 cursor-ew-resize overflow-hidden touch-none select-none"
-                    >
-                      <div 
-                        className="absolute left-0 top-0 bottom-0 bg-primary-yellow/10 transition-all duration-75"
-                        style={{ width: `${swipeProgress}%` }}
-                      />
-                      
-                      <div 
-                        className="w-10 h-10 rounded-full border-2 border-primary-yellow bg-[#121d28] flex items-center justify-center shadow-lg relative z-10 transition-all duration-75"
-                        style={{ left: `calc(${swipeProgress}% - ${swipeProgress * 0.4}px)` }}
-                      >
-                        <Crosshair className="w-5 h-5 text-primary-yellow" />
-                      </div>
-
-                      <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                        <span className="font-technical text-[10px] text-text-muted/60 uppercase tracking-widest">
-                          {swipeStatus === 'active' ? 'SWIPING...' : swipeStatus === 'done' ? 'COMPLETE' : 'DRAG ME RIGHT'}
-                        </span>
-                      </div>
+                <div className="grid grid-cols-3 gap-3">
+                  {[
+                    { label: 'Touch Latency', value: `${lookupResult.measuredLatencyMs}ms`, icon: Gauge,
+                      sub: lookupResult.measuredLatencyMs < 80 ? 'Excellent' : lookupResult.measuredLatencyMs < 120 ? 'Good' : 'High' },
+                    { label: 'Swipe Speed', value: `${Math.round(lookupResult.measuredSwipeSpeed * 100)}%`, icon: MoveHorizontal,
+                      sub: lookupResult.measuredSwipeSpeed > 1.1 ? 'Fast Screen' : lookupResult.measuredSwipeSpeed < 0.95 ? 'Slow Screen' : 'Normal' },
+                    { label: 'Gyro Quality', value: `${Math.round(lookupResult.gyroStabilityScore * 100)}%`, icon: RotateCw,
+                      sub: lookupResult.gyroStabilityScore > 0.88 ? 'Precise' : lookupResult.gyroStabilityScore > 0.70 ? 'Moderate' : 'Noisy' },
+                  ].map(({ label, value, icon: Icon, sub }) => (
+                    <div key={label} className="bg-surface-dark border border-border-tactical/20 rounded-xl p-3 text-center">
+                      <Icon className="w-4 h-4 text-primary-yellow mx-auto mb-1.5" />
+                      <p className="font-headline text-lg font-black text-foreground">{value}</p>
+                      <p className="text-[9px] font-technical text-text-muted uppercase">{label}</p>
+                      <p className="text-[9px] font-technical text-primary-yellow/70 uppercase mt-0.5">{sub}</p>
                     </div>
-
-                    {formData.measuredSwipeSpeed !== undefined && (
-                      <div className="text-center space-y-1">
-                        <p className="text-xs text-text-muted">
-                          Friction Rating: <span className="text-primary-yellow font-bold">{Math.round(formData.measuredSwipeSpeed * 100)}% Speed Scale</span>
-                        </p>
-                        <p className="text-[10px] text-text-muted">
-                          {formData.measuredSwipeSpeed < 1.0 
-                            ? 'Low-friction screen glide detected. Compensated for precision.' 
-                            : 'Sticky or high-friction glass surface detected. Sensitivity adjusted upwards.'}
-                        </p>
-                      </div>
-                    )}
-                  </div>
-
-                  <div className="flex justify-center">
-                    {swipeStatus === 'done' && (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setSwipeStatus('idle');
-                          setSwipeProgress(0);
-                        }}
-                        className="text-[10px] font-technical uppercase tracking-wider text-text-muted hover:text-foreground underline"
-                      >
-                        Reset Glide Test
-                      </button>
-                    )}
-                  </div>
+                  ))}
                 </div>
-              )}
 
-              {/* SUB-STEP 3: GYROSCOPE TEST */}
-              {calibSubStep === 'gyro' && (
-                <div className="flex-grow flex flex-col justify-between space-y-4">
-                  <div className="space-y-1">
-                    <h3 className="font-headline text-sm font-bold text-foreground uppercase tracking-wide">Gyroscope Sensor Calibration</h3>
-                    <p className="text-xs text-text-muted leading-relaxed">
-                      Tilt your device to register standard orientation levels, or skip/simulate if on a desktop device.
-                    </p>
-                  </div>
-
-                  <div className="flex flex-col items-center justify-center py-2 flex-grow">
-                    {gyroStatus === 'idle' && (
-                      <div className="flex gap-3">
-                        <button
-                          type="button"
-                          onClick={startGyroTest}
-                          className="px-6 py-2.5 rounded-lg bg-primary-yellow text-background text-xs font-technical tracking-wider uppercase font-bold hover:bg-primary-yellow/90"
-                        >
-                          Calibrate Sensor
-                        </button>
-                        <button
-                          type="button"
-                          onClick={skipGyroTest}
-                          className="px-6 py-2.5 rounded-lg bg-surface-hover border border-border-tactical/30 text-text-muted text-xs font-technical tracking-wider uppercase hover:text-foreground"
-                        >
-                          Skip / Desktop
-                        </button>
-                      </div>
-                    )}
-
-                    {gyroStatus === 'listening' && (
-                      <div className="text-center space-y-4 w-full max-w-[200px]">
-                        <div className="w-16 h-16 rounded-full border border-dashed border-primary-yellow/50 flex items-center justify-center mx-auto animate-spin [animation-duration:6s]">
-                          <RotateCw className="w-6 h-6 text-primary-yellow" />
-                        </div>
-                        <div className="font-technical text-[11px] text-primary-yellow space-y-1">
-                          <p>CALIBRATING: TILT PHONE</p>
-                          <p className="text-[10px] text-text-muted">
-                            BETA: {Math.round(gyroAngle.beta)}° | GAMMA: {Math.round(gyroAngle.gamma)}°
-                          </p>
-                        </div>
-                      </div>
-                    )}
-
-                    {(gyroStatus === 'done' || gyroStatus === 'unsupported') && (
-                      <div className="text-center space-y-2">
-                        <CheckCircle2 className="w-10 h-10 text-primary-yellow mx-auto" />
-                        <p className="font-technical text-sm font-bold text-foreground">
-                          {gyroStatus === 'unsupported' ? 'DESKTOP / SIMULATED SENSOR' : 'SENSOR REGISTERED'}
-                        </p>
-                        <p className="text-xs text-text-muted">
-                          Hardware Stability Index: <span className="text-primary-yellow font-bold">{Math.round((formData.gyroStabilityScore || 0.95) * 100)}%</span>
-                        </p>
-                        <button
-                          type="button"
-                          onClick={startGyroTest}
-                          className="text-[10px] font-technical uppercase tracking-wider text-text-muted hover:text-foreground underline block mx-auto pt-1"
-                        >
-                          Re-test Gyro
-                        </button>
-                      </div>
-                    )}
-                  </div>
-
-                  <div className="h-4" />
+                <div className="space-y-1">
+                  <p className="text-[9px] font-technical text-text-muted uppercase tracking-wider">Touch Sampling: {lookupResult.touchSamplingHz}Hz · Gyro Sensor: {lookupResult.gyroSensor}</p>
+                  <p className="text-[10px] text-text-muted leading-relaxed border-t border-border-tactical/15 pt-2">{lookupResult.summary}</p>
                 </div>
-              )}
 
-            </div>
+                <button
+                  type="button"
+                  onClick={() => { setLookupStatus('idle'); setLookupResult(null); setDeviceInput(''); }}
+                  className="text-[10px] font-technical uppercase tracking-wider text-text-muted hover:text-foreground underline"
+                >
+                  Search Different Device
+                </button>
+              </div>
+            )}
+
+            {/* Skip option */}
+            {lookupStatus === 'idle' && (
+              <div className="bg-surface-card border border-border-tactical/20 rounded-xl p-4 flex gap-3 text-xs text-text-muted items-start">
+                <Info className="w-4 h-4 text-primary-yellow flex-shrink-0 mt-0.5" />
+                <p className="leading-relaxed">
+                  <span className="text-foreground font-semibold">Tip:</span> Type your exact device model for AI-researched calibration. You can also skip this step — AimSync will use standard values for your selected device tier.
+                </p>
+              </div>
+            )}
           </div>
         )}
       </main>

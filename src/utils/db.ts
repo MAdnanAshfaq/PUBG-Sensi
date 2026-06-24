@@ -45,6 +45,14 @@ async function ensurePostgresTable() {
         created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
       );
     `;
+    await sql`
+      CREATE TABLE IF NOT EXISTS aimsync_feedback (
+        id SERIAL PRIMARY KEY,
+        slug VARCHAR(10) NOT NULL,
+        score VARCHAR(20) NOT NULL,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+      );
+    `;
     isTableInitialized = true;
   } catch (error) {
     console.error('Failed to initialize PostgreSQL table:', error);
@@ -138,3 +146,44 @@ export async function getResult(slug: string): Promise<SavedResult | null> {
   const db = JSON.parse(fileContent || '{}');
   return db[slug] || null;
 }
+
+const FEEDBACK_FILE_PATH = path.join(DATA_DIR, 'feedback.json');
+
+function ensureLocalFeedbackFile() {
+  if (!fs.existsSync(DATA_DIR)) {
+    fs.mkdirSync(DATA_DIR, { recursive: true });
+  }
+  if (!fs.existsSync(FEEDBACK_FILE_PATH)) {
+    fs.writeFileSync(FEEDBACK_FILE_PATH, JSON.stringify([]), 'utf-8');
+  }
+}
+
+export async function saveFeedback(slug: string, score: string): Promise<boolean> {
+  const sql = getSql();
+  if (sql) {
+    await ensurePostgresTable();
+    try {
+      await sql`
+        INSERT INTO aimsync_feedback (slug, score)
+        VALUES (${slug}, ${score});
+      `;
+      return true;
+    } catch (error) {
+      console.error('Failed to save feedback to PostgreSQL, falling back to disk:', error);
+    }
+  }
+
+  // Filesystem fallback
+  try {
+    ensureLocalFeedbackFile();
+    const fileContent = fs.readFileSync(FEEDBACK_FILE_PATH, 'utf-8');
+    const list = JSON.parse(fileContent || '[]');
+    list.push({ slug, score, createdAt: new Date().toISOString() });
+    fs.writeFileSync(FEEDBACK_FILE_PATH, JSON.stringify(list, null, 2), 'utf-8');
+    return true;
+  } catch (error) {
+    console.error('Failed to save feedback to disk:', error);
+    return false;
+  }
+}
+

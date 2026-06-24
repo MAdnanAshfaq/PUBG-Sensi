@@ -7,9 +7,16 @@ import {
   Share2, 
   Lightbulb, 
   RotateCcw, 
-  Target 
+  Target,
+  Settings,
+  BookOpen,
+  ThumbsUp,
+  ThumbsDown,
+  Info
 } from 'lucide-react';
 import { SavedResult } from '@/utils/db';
+import ShootingRange from './ShootingRange';
+import TrainingPlan from './TrainingPlan';
 
 interface SensitivityDashboardProps {
   result: SavedResult;
@@ -32,6 +39,12 @@ export default function SensitivityDashboard({ result }: SensitivityDashboardPro
   const [copiedLink, setCopiedLink] = useState(false);
   const [copiedConfig, setCopiedConfig] = useState(false);
   const [activeAnalysisTab, setActiveAnalysisTab] = useState<TabType>('camera');
+  const [isSimpleView, setIsSimpleView] = useState(true);
+
+  // Feedback states
+  const [feedbackOption, setFeedbackOption] = useState<string | null>(null);
+  const [submittingFeedback, setSubmittingFeedback] = useState(false);
+  const [feedbackSubmitted, setFeedbackSubmitted] = useState(false);
 
   // Editable sensitivity values initialized from server calculated settings
   const [sensValues, setSensValues] = useState<{
@@ -153,6 +166,29 @@ export default function SensitivityDashboard({ result }: SensitivityDashboardPro
     setTimeout(() => setCopiedConfig(false), 2000);
   };
 
+  // Submit player calibration feedback
+  const submitFeedback = async (score: string) => {
+    setFeedbackOption(score);
+    setSubmittingFeedback(true);
+    try {
+      const res = await fetch('/api/feedback', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          slug: result.slug,
+          score: score,
+        }),
+      });
+      if (res.ok) {
+        setFeedbackSubmitted(true);
+      }
+    } catch (error) {
+      console.error('Error submitting feedback:', error);
+    } finally {
+      setSubmittingFeedback(false);
+    }
+  };
+
   // Get explanation text for active analysis tab
   const getActiveExplanation = () => {
     switch (activeAnalysisTab) {
@@ -236,12 +272,12 @@ export default function SensitivityDashboard({ result }: SensitivityDashboardPro
 
     return (
       <div className="settings-overlay bg-[#1b2836]/85 border border-white/10 backdrop-blur-[4px] rounded-none p-6 md:p-8 space-y-6 shadow-2xl relative">
-        <div className="flex justify-between items-start">
+        <div className="flex justify-between items-start border-b border-[#384b5c]/20 pb-3">
           <div>
-            <h3 className="header-title text-[16px] font-medium text-white font-body select-none mb-1">
+            <h3 className="header-title text-[15px] font-headline font-bold uppercase tracking-wider text-white select-none">
               {title}
             </h3>
-            <p className="header-desc text-[11px] text-[#cbd5e1] mt-0.5 select-none leading-relaxed">
+            <p className="header-desc text-[11px] text-[#a0b0c0] mt-0.5 select-none leading-relaxed">
               {desc}
             </p>
           </div>
@@ -252,7 +288,7 @@ export default function SensitivityDashboard({ result }: SensitivityDashboardPro
               title="Reset entire card to optimal default values"
             >
               <RotateCcw className="w-2.5 h-2.5" />
-              RESET CARD
+              RESET
             </button>
           )}
         </div>
@@ -262,16 +298,16 @@ export default function SensitivityDashboard({ result }: SensitivityDashboardPro
           <div className="space-y-8">
             {renderSlider('no_scope_3rd', '3rd Person No Scope')}
             {renderSlider('red_dot', 'Red Dot, Holographic, Aim Assist')}
-            {renderSlider('scope_3x', '3x Scope, Win94')}
-            {renderSlider('scope_6x', '6x Scope')}
+            {!isSimpleView && renderSlider('scope_3x', '3x Scope, Win94')}
+            {!isSimpleView && renderSlider('scope_6x', '6x Scope')}
           </div>
 
           {/* Right Column */}
           <div className="space-y-8">
-            {renderSlider('no_scope_1st', '1st Person No Scope')}
-            {renderSlider('scope_2x', '2x Scope')}
+            {!isSimpleView && renderSlider('no_scope_1st', '1st Person No Scope')}
+            {!isSimpleView && renderSlider('scope_2x', '2x Scope')}
             {renderSlider('scope_4x', '4x Scope, VSS')}
-            {renderSlider('scope_8x', '8x Scope')}
+            {!isSimpleView && renderSlider('scope_8x', '8x Scope')}
           </div>
         </div>
       </div>
@@ -327,69 +363,174 @@ export default function SensitivityDashboard({ result }: SensitivityDashboardPro
           )}
         </div>
         <div className="space-y-1">
-          <p className="text-xs text-[#a0b0c0] leading-relaxed select-none">
+          <p className="text-xs text-[#cbdbe6] leading-relaxed select-none">
             {getActiveExplanation()}
           </p>
         </div>
       </div>
 
-      {/* PUBG Mobile Themed Sensitivity Cards Stack (Exact Replica) */}
-      <div className="space-y-5">
-        {renderSensCard(
-          'camera', 
-          'Camera', 
-          '(Affects the sensitivity of the camera when the screen is swiped without firing.)', 
-          200
-        )}
-        
-        {renderSensCard(
-          'ads', 
-          'ADS Sensitivity', 
-          '(Affects the sensitivity of the camera when the screen is swiped while firing. Can be used to keep the barrel down.)', 
-          200
-        )}
-
-        {hasGyro && renderSensCard(
-          'gyro', 
-          'Gyroscope', 
-          '(When the Gyroscope is activated, the sensitivity of the tilt camera controls can be adjusted.)', 
-          400
-        )}
-
-        {hasGyro && renderSensCard(
-          'adsGyro', 
-          'ADS Gyroscope', 
-          '(When the Gyroscope is activated, the sensitivity of the tilt camera controls during shooting can be adjusted.)', 
-          400
-        )}
-      </div>
-
-      {/* Shooting Range Simulator (Coming Soon Placeholder) */}
-      <div className="bg-[#1b2836]/75 border border-[#384b5c]/40 rounded-sm p-5 space-y-4 relative overflow-hidden">
-        <div className="flex justify-between items-center border-b border-[#384b5c]/30 pb-2">
-          <h3 className="font-headline text-base font-extrabold text-[#9cd8ff] tracking-wide uppercase flex items-center gap-2">
-            <Target className="w-5 h-5 text-primary-yellow animate-pulse" />
-            SHOOTING RANGE SIMULATOR
-          </h3>
-          <span className="font-technical text-[9px] bg-primary-yellow/15 text-primary-yellow border border-primary-yellow/30 px-2.5 py-0.5 rounded tracking-widest font-black">
-            COMING SOON
-          </span>
+      {/* Toggle View Mode & Sensitivity Cards Stack */}
+      <div className="space-y-4">
+        {/* Toggle Bar */}
+        <div className="flex justify-between items-center bg-[#1b2836]/50 border border-[#384b5c]/25 rounded p-3">
+          <div>
+            <span className="text-xs font-headline font-extrabold tracking-widest text-[#9cd8ff] uppercase block select-none">
+              SENSITIVITY DIAL MODE
+            </span>
+            <span className="text-[10px] text-text-muted uppercase tracking-wider block select-none mt-0.5">
+              {isSimpleView ? 'Essential scopes only (No scope, Red Dot, 4x)' : 'Full tactical layout (All scopes active)'}
+            </span>
+          </div>
+          <div className="flex bg-[#0c0e10] p-1 rounded border border-white/5 gap-1">
+            <button
+              onClick={() => setIsSimpleView(true)}
+              className={`text-[9px] font-headline font-black tracking-wider px-3 py-1.5 transition-all rounded cursor-pointer ${
+                isSimpleView
+                  ? 'bg-primary-yellow text-background shadow-[0_2px_6px_rgba(255,215,0,0.2)]'
+                  : 'text-[#a0b0c0] hover:text-white'
+              }`}
+            >
+              SIMPLE VIEW
+            </button>
+            <button
+              onClick={() => setIsSimpleView(false)}
+              className={`text-[9px] font-headline font-black tracking-wider px-3 py-1.5 transition-all rounded cursor-pointer ${
+                !isSimpleView
+                  ? 'bg-primary-yellow text-background shadow-[0_2px_6px_rgba(255,215,0,0.2)]'
+                  : 'text-[#a0b0c0] hover:text-white'
+              }`}
+            >
+              FULL VIEW
+            </button>
+          </div>
         </div>
 
-        <div className="relative border border-[#384b5c]/20 rounded-xl bg-background/20 p-8 text-center flex flex-col items-center justify-center min-h-[200px] overflow-hidden">
-          <div className="absolute inset-0 opacity-[0.03] pointer-events-none bg-[linear-gradient(to_right,#ffd700_1px,transparent_1px),linear-gradient(to_bottom,#ffd700_1px,transparent_1px)] bg-[size:15px_15px]" />
+        {/* PUBG Mobile Themed Sensitivity Cards Stack (Exact Replica) */}
+        <div className="space-y-5">
+          {renderSensCard(
+            'camera', 
+            'Camera Sensitivity', 
+            '(Affects the sensitivity of the camera when the screen is swiped without firing.)', 
+            200
+          )}
           
-          <div className="relative z-10 space-y-3 max-w-sm">
-            <div className="mx-auto w-12 h-12 rounded-full border border-primary-yellow/20 bg-primary-yellow/5 flex items-center justify-center text-primary-yellow mb-2 animate-pulse">
-              <Target className="w-6 h-6" />
-            </div>
-            <h4 className="font-headline text-sm font-extrabold text-foreground tracking-wider uppercase">PHYSICS ENGINE CALIBRATION</h4>
-            <p className="text-xs text-[#a0b0c0] leading-relaxed">
-              Our interactive 3D weapon recoil simulator is currently undergoing server-side physics engine calibration. Check back soon to test your sensitivity configurations.
+          {renderSensCard(
+            'ads', 
+            'ADS Sensitivity', 
+            '(Affects the sensitivity of the camera when the screen is swiped while firing. Can be used to control vertical barrel climb.)', 
+            200
+          )}
+
+          {hasGyro && renderSensCard(
+            'gyro', 
+            'Gyroscope Sensitivity', 
+            '(Adjusts camera view movement speed based on physical device tilting/rotation.)', 
+            400
+          )}
+
+          {hasGyro && renderSensCard(
+            'adsGyro', 
+            'ADS Gyroscope Sensitivity', 
+            '(Adjusts camera view movement speed based on device tilting during full auto firing.)', 
+            400
+          )}
+        </div>
+      </div>
+
+      {/* Manual Entry Visual Guide */}
+      <div className="bg-[#1b2836]/75 border border-[#384b5c]/40 rounded-sm p-5 space-y-4">
+        <div className="flex border-b border-[#384b5c]/30 pb-2 gap-2 items-center">
+          <Settings className="w-5 h-5 text-primary-yellow" />
+          <h3 className="font-headline text-base font-extrabold text-[#9cd8ff] tracking-wide uppercase select-none">
+            HOW TO MANUALLY ENTER VALUES IN-GAME
+          </h3>
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 font-technical text-xs">
+          <div className="bg-[#121d28] border border-white/5 p-3.5 rounded space-y-2">
+            <div className="text-[10px] text-primary-yellow font-black uppercase">01 / OPEN SETTINGS</div>
+            <p className="text-[11px] text-[#cbdbe6] leading-relaxed">
+              Launch PUBG Mobile/BGMI, tap the bottom right menu drawer, and select <strong>Settings</strong>.
+            </p>
+          </div>
+          <div className="bg-[#121d28] border border-white/5 p-3.5 rounded space-y-2">
+            <div className="text-[10px] text-primary-yellow font-black uppercase">02 / SENSITIVITY TAB</div>
+            <p className="text-[11px] text-[#cbdbe6] leading-relaxed">
+              Navigate to the <strong>Sensitivity</strong> tab and ensure you choose the <strong>Customize</strong> layout plan.
+            </p>
+          </div>
+          <div className="bg-[#121d28] border border-white/5 p-3.5 rounded space-y-2">
+            <div className="text-[10px] text-primary-yellow font-black uppercase">03 / APPLY VALUES</div>
+            <p className="text-[11px] text-[#cbdbe6] leading-relaxed">
+              Find the matching slider sections (Camera, ADS, Gyro) and slide them to match your calibration profile.
+            </p>
+          </div>
+          <div className="bg-[#121d28] border border-white/5 p-3.5 rounded space-y-2">
+            <div className="text-[10px] text-primary-yellow font-black uppercase">04 / PRACTICE</div>
+            <p className="text-[11px] text-[#cbdbe6] leading-relaxed">
+              Step into the <strong>Training Ground</strong> to build muscle memory using the personalized plan below.
             </p>
           </div>
         </div>
       </div>
+
+      {/* Interactive Shooting Range Simulator */}
+      <ShootingRange adsValues={sensValues.ads} />
+
+      {/* AimSync Calibration Engine Feedback Control */}
+      <div className="bg-[#1b2836]/75 border border-[#384b5c]/40 rounded-sm p-5 space-y-4">
+        <div className="flex items-center gap-2.5 border-b border-[#384b5c]/30 pb-2">
+          <Info className="w-5 h-5 text-primary-yellow" />
+          <h3 className="font-headline text-base font-extrabold text-[#9cd8ff] tracking-wide uppercase select-none">
+            ENGINE CALIBRATION RATING
+          </h3>
+        </div>
+        <div className="flex flex-col md:flex-row items-center justify-between gap-4">
+          <div className="space-y-0.5 text-center md:text-left">
+            <p className="text-xs text-[#cbdbe6] font-body">
+              How does this calculated sensitivity feel in the simulator or in-game?
+            </p>
+            <p className="text-[10px] text-text-muted uppercase tracking-wider font-technical">
+              Your anonymous signal helps calibrate our deep aim calculations.
+            </p>
+          </div>
+          
+          <div className="shrink-0 flex gap-2">
+            {feedbackSubmitted ? (
+              <div className="bg-green-600/10 border border-green-500/30 text-green-400 px-4 py-2 text-xs font-technical uppercase rounded flex items-center gap-1.5 select-none animate-fade-in">
+                <Check className="w-4 h-4" />
+                Feedback Registered! Thank You!
+              </div>
+            ) : (
+              <>
+                <button
+                  disabled={submittingFeedback}
+                  onClick={() => submitFeedback('too_slow')}
+                  className={`px-3 py-2 text-[10px] font-technical bg-[#121d28] hover:bg-[#1b2836] border border-white/5 text-[#cbd5e1] hover:text-white rounded transition-all cursor-pointer ${feedbackOption === 'too_slow' ? 'border-primary-yellow text-primary-yellow' : ''}`}
+                >
+                  🐌 TOO SLOW
+                </button>
+                <button
+                  disabled={submittingFeedback}
+                  onClick={() => submitFeedback('perfect')}
+                  className={`px-3 py-2 text-[10px] font-technical bg-[#121d28] hover:bg-[#1b2836] border border-white/5 text-[#cbd5e1] hover:text-white rounded transition-all cursor-pointer ${feedbackOption === 'perfect' ? 'border-green-500 text-green-400' : ''}`}
+                >
+                  🎯 PERFECT
+                </button>
+                <button
+                  disabled={submittingFeedback}
+                  onClick={() => submitFeedback('too_fast')}
+                  className={`px-3 py-2 text-[10px] font-technical bg-[#121d28] hover:bg-[#1b2836] border border-white/5 text-[#cbd5e1] hover:text-white rounded transition-all cursor-pointer ${feedbackOption === 'too_fast' ? 'border-primary-yellow text-primary-yellow' : ''}`}
+                >
+                  ⚡ TOO FAST
+                </button>
+              </>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* 7-Day Tactical Training Plan */}
+      <TrainingPlan result={result} />
     </div>
   );
 }

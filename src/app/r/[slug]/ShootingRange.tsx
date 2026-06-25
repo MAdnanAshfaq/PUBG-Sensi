@@ -29,8 +29,9 @@ type OpticType = 'red_dot' | 'scope_3x' | 'scope_4x' | 'scope_6x';
 interface Hit {
   x: number;
   y: number;
-  isBullsEye: boolean;
   score: number;
+  region: 'head' | 'body' | 'miss';
+  timestamp: number;
 }
 
 export default function ShootingRange({ sensValues }: ShootingRangeProps) {
@@ -181,7 +182,8 @@ function GameInstance({
   const [scoreSummary, setScoreSummary] = useState<any>(null);
   
   // Custom HUD positioning
-  const [fireBtnPos, setFireBtnPos] = useState({ x: 40, y: typeof window !== 'undefined' ? window.innerHeight - 150 : 200 });
+  const [isEditingHUD, setIsEditingHUD] = useState(false);
+  const [fireBtnPos, setFireBtnPos] = useState({ x: 60, y: typeof window !== 'undefined' ? window.innerHeight - 150 : 200 });
   const isDraggingFireBtnRef = useRef(false);
 
   // Crosshair position (virtual world space)
@@ -377,18 +379,24 @@ function GameInstance({
       const hitX = -posRef.current.x + (Math.random() - 0.5) * specs.spread * 6 * (1 / zoom);
       const hitY = -posRef.current.y + (Math.random() - 0.5) * specs.spread * 6 * (1 / zoom);
 
-      const targetRadius = 100 * zoom;
-      const distance = Math.sqrt(hitX * hitX + hitY * hitY);
-      const isBullsEye = distance <= (targetRadius * 0.2);
-      
-      let score = 0;
-      if (distance <= targetRadius * 0.2) score = 10;
-      else if (distance <= targetRadius * 0.4) score = 8;
-      else if (distance <= targetRadius * 0.6) score = 6;
-      else if (distance <= targetRadius * 0.8) score = 4;
-      else if (distance <= targetRadius) score = 2;
+      // Human dummy dimensions
+      const headRadius = 25 * zoom;
+      const bodyWidth = 60 * zoom;
+      const bodyHeight = 120 * zoom;
+      const headYOffset = -bodyHeight / 2 - headRadius + 10 * zoom;
 
-      const newHit = { x: hitX, y: hitY, isBullsEye, score };
+      let region: 'head' | 'body' | 'miss' = 'miss';
+      let score = 0;
+
+      if (Math.hypot(hitX, hitY - headYOffset) <= headRadius) {
+        region = 'head';
+        score = 10;
+      } else if (hitX >= -bodyWidth/2 && hitX <= bodyWidth/2 && hitY >= -bodyHeight/2 && hitY <= bodyHeight/2) {
+        region = 'body';
+        score = 5;
+      }
+
+      const newHit: Hit = { x: hitX, y: hitY, score, region, timestamp: performance.now() };
       
       setHits(h => {
         const newHits = [...h, newHit];
@@ -481,47 +489,47 @@ function GameInstance({
       const targetY = cy + posRef.current.y;
 
       const zoom = getOpticZoom();
-      const baseRadius = 100;
-      const targetRadius = baseRadius * zoom;
+      const headRadius = 25 * zoom;
+      const bodyWidth = 60 * zoom;
+      const bodyHeight = 120 * zoom;
+      const headYOffset = -bodyHeight / 2 - headRadius + 10 * zoom;
 
       // Draw ground
       ctx.fillStyle = '#2a3138';
       ctx.beginPath();
-      ctx.moveTo(0, cy + posRef.current.y + targetRadius + 20);
-      ctx.lineTo(canvas.width, cy + posRef.current.y + targetRadius + 20);
+      ctx.moveTo(0, cy + posRef.current.y + (bodyHeight / 2) + 10);
+      ctx.lineTo(canvas.width, cy + posRef.current.y + (bodyHeight / 2) + 10);
       ctx.lineTo(canvas.width, canvas.height);
       ctx.lineTo(0, canvas.height);
       ctx.fill();
 
-      // Draw Target Board Rings
-      const ringColors = [
-        { c: '#ffffff', border: '#cbd5e1' },
-        { c: '#ffffff', border: '#cbd5e1' },
-        { c: '#3b82f6', border: '#2563eb' },
-        { c: '#ef4444', border: '#dc2626' },
-        { c: '#f59e0b', border: '#d97706' }, // Bulls-Eye
-      ];
+      // Draw Human Dummy
+      ctx.fillStyle = '#64748b';
+      ctx.strokeStyle = '#475569';
+      ctx.lineWidth = 2;
 
-      for (let i = 0; i < 5; i++) {
-        const radius = targetRadius * (1 - i * 0.2);
-        ctx.beginPath();
-        ctx.arc(targetX, targetY, radius, 0, 2 * Math.PI);
-        ctx.fillStyle = ringColors[i].c;
-        ctx.fill();
-        ctx.strokeStyle = ringColors[i].border;
-        ctx.lineWidth = 2;
-        ctx.stroke();
-      }
+      // Body
+      ctx.beginPath();
+      ctx.roundRect(targetX - bodyWidth/2, targetY - bodyHeight/2, bodyWidth, bodyHeight, 10 * zoom);
+      ctx.fill();
+      ctx.stroke();
+
+      // Head
+      ctx.beginPath();
+      ctx.arc(targetX, targetY + headYOffset, headRadius, 0, 2 * Math.PI);
+      ctx.fill();
+      ctx.stroke();
 
       // Draw Hits (fixed to target)
       hits.forEach((hit) => {
-        const hX = targetX + hit.x;
-        const hY = targetY + hit.y;
-        
-        ctx.beginPath();
-        ctx.arc(hX, hY, 4, 0, 2 * Math.PI);
-        ctx.fillStyle = hit.isBullsEye ? '#ffd700' : '#000000';
-        ctx.fill();
+        if (hit.region !== 'miss') {
+          const hX = targetX + hit.x;
+          const hY = targetY + hit.y;
+          ctx.beginPath();
+          ctx.arc(hX, hY, 3, 0, 2 * Math.PI);
+          ctx.fillStyle = hit.region === 'head' ? '#ef4444' : '#ffffff';
+          ctx.fill();
+        }
       });
 
       // Draw Crosshair (Fixed in center of screen)
@@ -535,6 +543,25 @@ function GameInstance({
       ctx.beginPath(); ctx.moveTo(cx, cy - gap - len); ctx.lineTo(cx, cy - gap); ctx.stroke();
       ctx.beginPath(); ctx.moveTo(cx, cy + gap); ctx.lineTo(cx, cy + gap + len); ctx.stroke();
       ctx.beginPath(); ctx.arc(cx, cy, 2, 0, 2 * Math.PI); ctx.fillStyle = '#22c55e'; ctx.fill();
+
+      // Draw Hit Marker (at center screen like PUBG)
+      const recentHit = hits.length > 0 ? hits[hits.length - 1] : null;
+      if (recentHit && recentHit.region !== 'miss') {
+        const age = time - recentHit.timestamp;
+        if (age < 300) {
+          const alpha = 1 - (age / 300);
+          ctx.strokeStyle = recentHit.region === 'head' ? `rgba(239, 68, 68, ${alpha})` : `rgba(255, 255, 255, ${alpha})`;
+          ctx.lineWidth = 2;
+          const m = 8;
+          const d = 16;
+          ctx.beginPath();
+          ctx.moveTo(cx - m, cy - m); ctx.lineTo(cx - d, cy - d);
+          ctx.moveTo(cx + m, cy + m); ctx.lineTo(cx + d, cy + d);
+          ctx.moveTo(cx - m, cy + m); ctx.lineTo(cx - d, cy + d);
+          ctx.moveTo(cx + m, cy - m); ctx.lineTo(cx + d, cy - d);
+          ctx.stroke();
+        }
+      }
 
       // Scope Overlay
       if (optic !== 'red_dot') {
@@ -582,41 +609,15 @@ function GameInstance({
       {/* UI Overlay */}
       <div className="absolute inset-0 z-10 pointer-events-none p-4">
         
-        {/* Top Bar - Weapon & Optic Selectors */}
+        {/* Top Bar - Edit Controls & Exit */}
         <div className="flex justify-between items-start pointer-events-auto">
-          <div className="flex gap-4">
-            <div className="bg-black/60 p-2 rounded-lg border border-white/10 backdrop-blur-md">
-              <div className="text-[9px] text-primary-yellow tracking-widest uppercase mb-1">Weapon</div>
-              <div className="flex gap-1">
-                {(['m416', 'akm', 'awm'] as WeaponType[]).map(w => (
-                  <button 
-                    key={w}
-                    onClick={() => setWeapon(w)}
-                    className={`px-3 py-1 rounded text-xs font-black uppercase transition-colors ${weapon === w ? 'bg-primary-yellow text-black' : 'bg-white/10 text-white hover:bg-white/20'}`}
-                  >
-                    {weapons[w].name}
-                  </button>
-                ))}
-              </div>
-              <div className="text-xs text-white/70 mt-1">{bulletsLeft} / {weapons[weapon].magSize} Ammo</div>
-            </div>
-
-            <div className="bg-black/60 p-2 rounded-lg border border-white/10 backdrop-blur-md hidden sm:block">
-              <div className="text-[9px] text-primary-yellow tracking-widest uppercase mb-1">Optic</div>
-              <div className="flex gap-1">
-                {(['red_dot', 'scope_3x', 'scope_4x', 'scope_6x'] as OpticType[]).map(o => (
-                  <button 
-                    key={o}
-                    onClick={() => setOptic(o)}
-                    className={`px-2 py-1 rounded text-xs font-black uppercase transition-colors ${optic === o ? 'bg-primary-yellow text-black' : 'bg-white/10 text-white hover:bg-white/20'}`}
-                  >
-                    {o.replace('scope_', '').replace('_', ' ')}
-                  </button>
-                ))}
-              </div>
-            </div>
-          </div>
-
+          <button 
+            onClick={() => setIsEditingHUD(!isEditingHUD)}
+            className={`px-4 py-2 rounded font-bold uppercase shadow-lg transition-colors text-xs sm:text-sm tracking-wider ${isEditingHUD ? 'bg-primary-yellow text-black border border-primary-yellow' : 'bg-black/50 text-white border border-white/20 hover:bg-white/10'}`}
+          >
+            {isEditingHUD ? 'SAVE CONTROLS' : 'EDIT CONTROLS'}
+          </button>
+          
           <button 
             onClick={onExit}
             className="bg-red-500/80 text-white p-2 rounded font-bold uppercase hover:bg-red-600 shadow-lg"
@@ -627,36 +628,87 @@ function GameInstance({
 
         {/* Action Controls */}
         <div className="absolute inset-0 pointer-events-none">
+          {/* Bottom Right - Weapon & Optic & Reload */}
+          <div className="absolute bottom-4 right-4 sm:bottom-6 sm:right-6 pointer-events-auto flex flex-col items-end gap-3 z-20">
+            {/* Weapon & Optic Selectors */}
+            <div className={`flex flex-col gap-2 transition-opacity duration-300 ${isEditingHUD ? 'opacity-30 pointer-events-none' : 'opacity-80 hover:opacity-100'}`}>
+              <div className="bg-black/60 p-2 rounded-lg border border-white/10 backdrop-blur-md flex flex-col items-end">
+                <div className="text-[9px] text-primary-yellow tracking-widest uppercase mb-1">Optic</div>
+                <div className="flex gap-1">
+                  {(['red_dot', 'scope_3x', 'scope_4x', 'scope_6x'] as OpticType[]).map(o => (
+                    <button 
+                      key={o}
+                      onClick={() => setOptic(o)}
+                      className={`px-2 py-1 rounded text-xs font-black uppercase transition-colors ${optic === o ? 'bg-primary-yellow text-black' : 'bg-white/10 text-white hover:bg-white/20'}`}
+                    >
+                      {o.replace('scope_', '').replace('_', ' ')}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="bg-black/60 p-2 rounded-lg border border-white/10 backdrop-blur-md flex flex-col items-end">
+                <div className="text-[9px] text-primary-yellow tracking-widest uppercase mb-1">Weapon</div>
+                <div className="flex gap-1">
+                  {(['m416', 'akm', 'awm'] as WeaponType[]).map(w => (
+                    <button 
+                      key={w}
+                      onClick={() => setWeapon(w)}
+                      className={`px-3 py-1 rounded text-xs font-black uppercase transition-colors ${weapon === w ? 'bg-primary-yellow text-black' : 'bg-white/10 text-white hover:bg-white/20'}`}
+                    >
+                      {weapons[w].name}
+                    </button>
+                  ))}
+                </div>
+                <div className="text-xs text-white/70 mt-1">{bulletsLeft} / {weapons[weapon].magSize} Ammo</div>
+              </div>
+            </div>
+
+            {/* Reload Button */}
+            {bulletsLeft <= 0 && !scoreSummary && (
+              <button 
+                onClick={resetTarget}
+                className="bg-primary-yellow text-black px-6 py-3 rounded-full font-black animate-pulse shadow-[0_0_20px_rgba(255,215,0,0.5)] flex items-center gap-2 mt-4"
+              >
+                <RefreshCw className="w-5 h-5" /> RELOAD
+              </button>
+            )}
+          </div>
           {/* Draggable Fire Button Container */}
           <div 
-            className="absolute pointer-events-auto flex flex-col items-center gap-2"
+            className={`absolute pointer-events-auto flex flex-col items-center gap-2 ${isEditingHUD ? 'z-50' : 'z-10'}`}
             style={{ left: fireBtnPos.x, top: fireBtnPos.y }}
           >
             {/* Drag Handle */}
-            <div 
-              className="w-10 h-3 bg-white/20 rounded-full cursor-move touch-none hover:bg-primary-yellow/50 active:bg-primary-yellow"
-              onPointerDown={(e) => {
-                const target = e.currentTarget;
-                target.setPointerCapture(e.pointerId);
-                isDraggingFireBtnRef.current = true;
-              }}
-              onPointerMove={(e) => {
-                if (isDraggingFireBtnRef.current) {
-                  setFireBtnPos(prev => ({
-                    x: prev.x + e.movementX,
-                    y: prev.y + e.movementY
-                  }));
-                }
-              }}
-              onPointerUp={(e) => {
-                isDraggingFireBtnRef.current = false;
-                e.currentTarget.releasePointerCapture(e.pointerId);
-              }}
-              onPointerCancel={(e) => {
-                isDraggingFireBtnRef.current = false;
-                e.currentTarget.releasePointerCapture(e.pointerId);
-              }}
-            />
+            {isEditingHUD && (
+              <div 
+                className="w-20 h-8 bg-primary-yellow rounded-full cursor-move touch-none flex items-center justify-center animate-pulse shadow-lg"
+                onPointerDown={(e) => {
+                  const target = e.currentTarget;
+                  target.setPointerCapture(e.pointerId);
+                  isDraggingFireBtnRef.current = true;
+                }}
+                onPointerMove={(e) => {
+                  if (isDraggingFireBtnRef.current) {
+                    setFireBtnPos(prev => ({
+                      x: prev.x + e.movementX,
+                      y: prev.y + e.movementY
+                    }));
+                  }
+                }}
+                onPointerUp={(e) => {
+                  isDraggingFireBtnRef.current = false;
+                  e.currentTarget.releasePointerCapture(e.pointerId);
+                }}
+                onPointerCancel={(e) => {
+                  isDraggingFireBtnRef.current = false;
+                  e.currentTarget.releasePointerCapture(e.pointerId);
+                }}
+              >
+                <span className="text-[10px] font-black text-black">DRAG</span>
+              </div>
+            )}
+            
             {/* The Fire Button itself */}
             <button
               onTouchStart={startFiring}
@@ -668,24 +720,14 @@ function GameInstance({
               className={`w-24 h-24 sm:w-28 sm:h-28 rounded-full border-4 flex items-center justify-center font-black text-xl sm:text-2xl transition-all shadow-xl select-none touch-none ${
                 bulletsLeft <= 0 ? 'bg-zinc-800 border-zinc-600 text-zinc-500' :
                 isFiring ? 'bg-white border-red-500 text-red-500 scale-95' : 'bg-white/20 border-white text-white hover:bg-white/30'
-              }`}
+              } ${isEditingHUD ? 'ring-4 ring-primary-yellow ring-offset-4 ring-offset-black/50' : ''}`}
               style={{ backdropFilter: 'blur(4px)', WebkitUserSelect: 'none' }}
             >
               FIRE
             </button>
           </div>
 
-          {/* Reload Button */}
-          {bulletsLeft <= 0 && !scoreSummary && (
-            <div className="absolute bottom-6 right-6 pointer-events-auto">
-              <button 
-                onClick={resetTarget}
-                className="bg-primary-yellow text-black px-6 py-3 rounded-full font-black animate-pulse shadow-[0_0_20px_rgba(255,215,0,0.5)] flex items-center gap-2"
-              >
-                <RefreshCw className="w-5 h-5" /> RELOAD
-              </button>
-            </div>
-          )}
+
 
           <div className="text-white/30 text-xs tracking-[0.2em] pointer-events-none absolute bottom-4 right-1/4 sm:right-1/3">
             SWIPE RIGHT HALF TO AIM

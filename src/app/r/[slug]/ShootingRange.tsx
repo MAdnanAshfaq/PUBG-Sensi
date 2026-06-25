@@ -143,7 +143,9 @@ export default function ShootingRange({ sensValues }: ShootingRangeProps) {
             <GameInstance 
               sensValues={sensValues} 
               weapon={weapon}
+              setWeapon={setWeapon}
               optic={optic}
+              setOptic={setOptic}
               onExit={exitFullscreen} 
             />
           )}
@@ -159,12 +161,16 @@ export default function ShootingRange({ sensValues }: ShootingRangeProps) {
 function GameInstance({ 
   sensValues, 
   weapon, 
+  setWeapon,
   optic, 
+  setOptic,
   onExit 
 }: { 
   sensValues: ShootingRangeProps['sensValues'], 
   weapon: WeaponType, 
+  setWeapon: (w: WeaponType) => void,
   optic: OpticType, 
+  setOptic: (o: OpticType) => void,
   onExit: () => void 
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -173,6 +179,10 @@ function GameInstance({
   const [isFiring, setIsFiring] = useState(false);
   const [hits, setHits] = useState<Hit[]>([]);
   const [scoreSummary, setScoreSummary] = useState<any>(null);
+  
+  // Custom HUD positioning
+  const [fireBtnPos, setFireBtnPos] = useState({ x: 40, y: typeof window !== 'undefined' ? window.innerHeight - 150 : 200 });
+  const isDraggingFireBtnRef = useRef(false);
 
   // Crosshair position (virtual world space)
   const posRef = useRef({ x: 0, y: 0 });
@@ -338,7 +348,8 @@ function GameInstance({
 
 
   // ── FIRING & RECOIL LOGIC ──────────────────────────────────────────────────
-  const startFiring = () => {
+  const startFiring = (e?: React.TouchEvent | React.MouseEvent) => {
+    if (e && e.cancelable) e.preventDefault(); // Prevent text selection and zoom
     if (bulletsLeft <= 0 || scoreSummary) return;
     setIsFiring(true);
     isFiringRef.current = true;
@@ -346,7 +357,8 @@ function GameInstance({
     fireBullet();
   };
 
-  const stopFiring = () => {
+  const stopFiring = (e?: React.TouchEvent | React.MouseEvent) => {
+    if (e && e.cancelable) e.preventDefault();
     setIsFiring(false);
     isFiringRef.current = false;
   };
@@ -423,6 +435,13 @@ function GameInstance({
     setHits([]);
     posRef.current = { x: 0, y: 0 };
     setScoreSummary(null);
+  };
+
+  // Draggable Fire Button Logic
+  const handleFireBtnTouchStart = (e: React.TouchEvent | React.MouseEvent) => {
+    // We only want to drag if we are touching a specific "drag handle" or maybe just two-finger drag?
+    // Let's make it so if we hold it, it fires. If we want to move it, we drag a small handle next to it.
+    // Or, we can just track touch move on the fire button.
   };
 
 
@@ -545,7 +564,7 @@ function GameInstance({
 
 
   return (
-    <div className="w-full h-full relative font-headline">
+    <div className="w-full h-full relative font-headline select-none touch-none">
       {/* Background Canvas */}
       <canvas
         ref={canvasRef}
@@ -561,49 +580,114 @@ function GameInstance({
       />
 
       {/* UI Overlay */}
-      <div className="absolute inset-0 z-10 pointer-events-none flex flex-col justify-between p-4">
+      <div className="absolute inset-0 z-10 pointer-events-none p-4">
         
-        {/* Top Bar */}
+        {/* Top Bar - Weapon & Optic Selectors */}
         <div className="flex justify-between items-start pointer-events-auto">
-          <div className="bg-black/50 p-2 rounded border border-white/10 text-primary-yellow">
-            <h4 className="font-black text-lg">{weapons[weapon].name}</h4>
-            <div className="text-xs text-white">{bulletsLeft} / {weapons[weapon].magSize}</div>
+          <div className="flex gap-4">
+            <div className="bg-black/60 p-2 rounded-lg border border-white/10 backdrop-blur-md">
+              <div className="text-[9px] text-primary-yellow tracking-widest uppercase mb-1">Weapon</div>
+              <div className="flex gap-1">
+                {(['m416', 'akm', 'awm'] as WeaponType[]).map(w => (
+                  <button 
+                    key={w}
+                    onClick={() => setWeapon(w)}
+                    className={`px-3 py-1 rounded text-xs font-black uppercase transition-colors ${weapon === w ? 'bg-primary-yellow text-black' : 'bg-white/10 text-white hover:bg-white/20'}`}
+                  >
+                    {weapons[w].name}
+                  </button>
+                ))}
+              </div>
+              <div className="text-xs text-white/70 mt-1">{bulletsLeft} / {weapons[weapon].magSize} Ammo</div>
+            </div>
+
+            <div className="bg-black/60 p-2 rounded-lg border border-white/10 backdrop-blur-md hidden sm:block">
+              <div className="text-[9px] text-primary-yellow tracking-widest uppercase mb-1">Optic</div>
+              <div className="flex gap-1">
+                {(['red_dot', 'scope_3x', 'scope_4x', 'scope_6x'] as OpticType[]).map(o => (
+                  <button 
+                    key={o}
+                    onClick={() => setOptic(o)}
+                    className={`px-2 py-1 rounded text-xs font-black uppercase transition-colors ${optic === o ? 'bg-primary-yellow text-black' : 'bg-white/10 text-white hover:bg-white/20'}`}
+                  >
+                    {o.replace('scope_', '').replace('_', ' ')}
+                  </button>
+                ))}
+              </div>
+            </div>
           </div>
+
           <button 
             onClick={onExit}
-            className="bg-red-500/80 text-white p-2 rounded font-bold uppercase hover:bg-red-600"
+            className="bg-red-500/80 text-white p-2 rounded font-bold uppercase hover:bg-red-600 shadow-lg"
           >
             <X className="w-6 h-6" />
           </button>
         </div>
 
-        {/* Action Controls (Bottom) */}
-        <div className="flex justify-between items-end pointer-events-auto">
-          {/* Left Side Fire Button */}
-          <button
-            onPointerDown={startFiring}
-            onPointerUp={stopFiring}
-            onPointerLeave={stopFiring}
-            className={`w-28 h-28 rounded-full border-4 flex items-center justify-center font-black text-2xl transition-all shadow-xl ${
-              bulletsLeft <= 0 ? 'bg-zinc-800 border-zinc-600 text-zinc-500' :
-              isFiring ? 'bg-white border-red-500 text-red-500 scale-95' : 'bg-white/20 border-white text-white hover:bg-white/30'
-            }`}
-            style={{ backdropFilter: 'blur(4px)' }}
+        {/* Action Controls */}
+        <div className="absolute inset-0 pointer-events-none">
+          {/* Draggable Fire Button Container */}
+          <div 
+            className="absolute pointer-events-auto flex flex-col items-center gap-2"
+            style={{ left: fireBtnPos.x, top: fireBtnPos.y }}
           >
-            FIRE
-          </button>
-
-          {/* Right Side Controls */}
-          {bulletsLeft <= 0 && !scoreSummary && (
-            <button 
-              onClick={resetTarget}
-              className="bg-primary-yellow text-black px-6 py-3 rounded-full font-black animate-pulse shadow-[0_0_20px_rgba(255,215,0,0.5)] flex items-center gap-2"
+            {/* Drag Handle */}
+            <div 
+              className="w-10 h-3 bg-white/20 rounded-full cursor-move touch-none hover:bg-primary-yellow/50 active:bg-primary-yellow"
+              onPointerDown={(e) => {
+                const target = e.currentTarget;
+                target.setPointerCapture(e.pointerId);
+                isDraggingFireBtnRef.current = true;
+              }}
+              onPointerMove={(e) => {
+                if (isDraggingFireBtnRef.current) {
+                  setFireBtnPos(prev => ({
+                    x: prev.x + e.movementX,
+                    y: prev.y + e.movementY
+                  }));
+                }
+              }}
+              onPointerUp={(e) => {
+                isDraggingFireBtnRef.current = false;
+                e.currentTarget.releasePointerCapture(e.pointerId);
+              }}
+              onPointerCancel={(e) => {
+                isDraggingFireBtnRef.current = false;
+                e.currentTarget.releasePointerCapture(e.pointerId);
+              }}
+            />
+            {/* The Fire Button itself */}
+            <button
+              onTouchStart={startFiring}
+              onTouchEnd={stopFiring}
+              onTouchCancel={stopFiring}
+              onMouseDown={startFiring}
+              onMouseUp={stopFiring}
+              onMouseLeave={stopFiring}
+              className={`w-24 h-24 sm:w-28 sm:h-28 rounded-full border-4 flex items-center justify-center font-black text-xl sm:text-2xl transition-all shadow-xl select-none touch-none ${
+                bulletsLeft <= 0 ? 'bg-zinc-800 border-zinc-600 text-zinc-500' :
+                isFiring ? 'bg-white border-red-500 text-red-500 scale-95' : 'bg-white/20 border-white text-white hover:bg-white/30'
+              }`}
+              style={{ backdropFilter: 'blur(4px)', WebkitUserSelect: 'none' }}
             >
-              <RefreshCw className="w-5 h-5" /> RELOAD & RESET
+              FIRE
             </button>
+          </div>
+
+          {/* Reload Button */}
+          {bulletsLeft <= 0 && !scoreSummary && (
+            <div className="absolute bottom-6 right-6 pointer-events-auto">
+              <button 
+                onClick={resetTarget}
+                className="bg-primary-yellow text-black px-6 py-3 rounded-full font-black animate-pulse shadow-[0_0_20px_rgba(255,215,0,0.5)] flex items-center gap-2"
+              >
+                <RefreshCw className="w-5 h-5" /> RELOAD
+              </button>
+            </div>
           )}
 
-          <div className="text-white/30 text-xs tracking-[0.2em] pointer-events-none absolute bottom-4 right-1/2 translate-x-1/2">
+          <div className="text-white/30 text-xs tracking-[0.2em] pointer-events-none absolute bottom-4 right-1/4 sm:right-1/3">
             SWIPE RIGHT HALF TO AIM
           </div>
         </div>

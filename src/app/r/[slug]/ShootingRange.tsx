@@ -241,10 +241,18 @@ function GameInstance({
         
         let dBeta = current.beta - lastGyroRef.current.beta;
         let dGamma = current.gamma - lastGyroRef.current.gamma;
+        let dAlpha = current.alpha - lastGyroRef.current.alpha;
 
         // Handle wrap-around
         if (dBeta > 180) dBeta -= 360; else if (dBeta < -180) dBeta += 360;
         if (dGamma > 180) dGamma -= 360; else if (dGamma < -180) dGamma += 360;
+        if (dAlpha > 180) dAlpha -= 360; else if (dAlpha < -180) dAlpha += 360;
+
+        // Ignore massive jumps (prevents the target from flying off-screen when entering fullscreen)
+        if (Math.abs(dBeta) > 30 || Math.abs(dGamma) > 30 || Math.abs(dAlpha) > 30) {
+          lastGyroRef.current = current;
+          return;
+        }
 
         // Apply sensitivity
         const opticKey = getOpticKey();
@@ -260,8 +268,12 @@ function GameInstance({
           // PUBG gyro scaling factor (tune this so 300% sens feels realistic)
           const gyroScale = (gyroSens / 100) * 8.0; 
           
-          posRef.current.x += dBeta * gyroScale; // Mapping might need flip based on specific landscape orientation (left vs right)
-          posRef.current.y += dGamma * gyroScale; 
+          // In landscape, combine alpha (flat yaw) and beta (upright roll) for horizontal aim
+          const deltaX = dAlpha + dBeta;
+          const deltaY = dGamma; // Up/down pitch
+          
+          posRef.current.x += deltaX * gyroScale; 
+          posRef.current.y += deltaY * gyroScale; 
           
           // Clamp to virtual world bounds
           posRef.current.x = Math.max(-1000, Math.min(1000, posRef.current.x));
@@ -611,12 +623,20 @@ function GameInstance({
         
         {/* Top Bar - Edit Controls & Exit */}
         <div className="flex justify-between items-start pointer-events-auto">
-          <button 
-            onClick={() => setIsEditingHUD(!isEditingHUD)}
-            className={`px-4 py-2 rounded font-bold uppercase shadow-lg transition-colors text-xs sm:text-sm tracking-wider ${isEditingHUD ? 'bg-primary-yellow text-black border border-primary-yellow' : 'bg-black/50 text-white border border-white/20 hover:bg-white/10'}`}
-          >
-            {isEditingHUD ? 'SAVE CONTROLS' : 'EDIT CONTROLS'}
-          </button>
+          <div className="flex flex-col gap-2">
+            <button 
+              onClick={() => setIsEditingHUD(!isEditingHUD)}
+              className={`px-4 py-2 rounded font-bold uppercase shadow-lg transition-colors text-xs sm:text-sm tracking-wider ${isEditingHUD ? 'bg-primary-yellow text-black border border-primary-yellow' : 'bg-black/50 text-white border border-white/20 hover:bg-white/10'}`}
+            >
+              {isEditingHUD ? 'SAVE CONTROLS' : 'EDIT CONTROLS'}
+            </button>
+            <button 
+              onClick={() => { posRef.current = { x: 0, y: 0 }; }}
+              className="px-4 py-2 bg-black/50 text-white border border-white/20 hover:bg-white/10 rounded font-bold uppercase shadow-lg transition-colors text-xs sm:text-sm tracking-wider"
+            >
+              CENTER AIM
+            </button>
+          </div>
           
           <button 
             onClick={onExit}
